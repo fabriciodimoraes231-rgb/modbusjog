@@ -15,6 +15,9 @@ no endereco menor (exemplo de FC16 do manual, p. 19: 14464 em 68 e 1 em 69 dao
 
 # --- Corrente, subdivisao e standby (p. 13) ------------------------------------
 
+# Na bancada o 0 NAO aceita escrita por RS-485: ecoa o FC06 e mantem o valor.
+# Ele muda quando se escreve o 26 -- a GUI ajusta a corrente pelo 26 e trata o
+# 0 como leitura do resultado. A relacao entre os dois nao esta no manual.
 REG_CORRENTE_PICO = 0        # mA, 50~7800 (fabrica 3000)
 REG_PULSOS_VOLTA = 1         # subdivisao: pulsos por volta, 200~51200 (fabrica 6000)
 REG_STANDBY_TEMPO = 2        # ms ate o drive entrar em standby, 100~10000 (fabrica 300)
@@ -44,7 +47,7 @@ REG_KI = 16                  # 0~32767 (fabrica 200)
 REG_BAUD = 18                # 96 = 9600 (unico valor exemplificado no manual)
 REG_CORRENTE_EFETIVA = 22    # R: mA, 1~4200
 REG_MALHA = 24               # 1 = malha aberta, 2 = malha fechada (fabrica 2)
-REG_CORRENTE_OPER_PCT = 26   # % da corrente operacional, 0~100
+REG_CORRENTE_OPER_PCT = 26   # % da corrente operacional, 0~100; muda o 0 (bancada)
 REG_ID = 31                  # R: endereco do equipamento
 # Contador de pulsos: e a posicao usada por este programa. O manual o chama
 # de "pulsos externos recebidos", mas a secao de retorno a zero (p. 18) manda
@@ -174,9 +177,12 @@ FILTRO_LIMITE_US = 50        # unidade do registrador 74
 # --- Configuracao gravada na memoria do drive ----------------------------------
 # O que o card CONFIGURACAO DO DRIVE escreve e o que tem de sobreviver a um
 # religamento. 0~3 sao vizinhos e vem num quadro so (Drive.ler_configuracao).
+# O 0 fica na lista mesmo sem ser escrito: e o efeito do 26 que se quer ver
+# sobreviver ao religamento.
 
 REGS_CONFIGURACAO = (REG_CORRENTE_PICO, REG_PULSOS_VOLTA, REG_STANDBY_TEMPO,
-                     REG_STANDBY_PCT, REG_AUTOAJUSTE, REG_KP, REG_KI, REG_MALHA)
+                     REG_STANDBY_PCT, REG_AUTOAJUSTE, REG_KP, REG_KI, REG_MALHA,
+                     REG_CORRENTE_OPER_PCT)
 
 
 def nome_alarme(codigo):

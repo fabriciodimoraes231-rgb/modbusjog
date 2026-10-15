@@ -30,6 +30,7 @@ from .registradores import (
     REG_ALARME,
     REG_AUTOAJUSTE,
     REG_COMANDO,
+    REG_CORRENTE_OPER_PCT,
     REG_CORRENTE_PICO,
     REG_DESACEL_L,
     REG_ENABLE,
@@ -323,7 +324,7 @@ class Drive:
     def ler_configuracao(self):
         """Le os registradores de REGS_CONFIGURACAO: {registrador: valor}.
 
-        0~3 vem num quadro so; 13, 15~16 e 24 em quadros separados. Levanta
+        0~3 vem num quadro so; 13, 15~16, 24 e 26 em quadros separados. Levanta
         DriveNaoConfirmou se qualquer leitura falhar -- uma conferencia com
         buraco nao prova nada.
         """
@@ -332,6 +333,7 @@ class Drive:
         cfg[REG_AUTOAJUSTE] = self.ler(REG_AUTOAJUSTE)[0]
         cfg[REG_KP], cfg[REG_KI] = self.ler(REG_KP, 2)
         cfg[REG_MALHA] = self.ler(REG_MALHA)[0]
+        cfg[REG_CORRENTE_OPER_PCT] = self.ler(REG_CORRENTE_OPER_PCT)[0]
         return cfg
 
     def aguardar_religamento(self, prazo=120.0, silencio_min=1.0,

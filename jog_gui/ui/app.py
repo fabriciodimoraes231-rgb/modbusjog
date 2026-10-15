@@ -108,8 +108,9 @@ class JogApp(DrivesMixin, ConexaoMixin, MotorMixin, CorrenteMixin, JogMixin,
         # endereco congelar - cada pedido na fila carrega o seu.
         threading.Thread(target=self._loop_movimento, daemon=True).start()
 
-        # Configuracao do drive (registradores 0, 1, 2, 3, 13, 15, 16, 24)
-        self.corr_pico     = tk.IntVar(value=1000)   # mA
+        # Configuracao do drive (registradores 1, 2, 3, 13, 15, 16, 24, 26).
+        # A corrente se ajusta pelo 26; o 0 so e lido (ver registradores).
+        self.corr_oper_pct = tk.IntVar(value=50)     # % (reg 26)
         self.corr_standby  = tk.IntVar(value=50)     # %
         self.standby_ms    = tk.IntVar(value=300)    # ms
         self.modo_malha    = tk.IntVar(value=MALHA_ABERTA)
