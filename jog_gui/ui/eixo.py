@@ -48,8 +48,8 @@ CAMPOS = (
     ("jog_sentido",     "direction",       FRENTE),
     ("rampa_ms",        "rampa_ms",         200),
 
-    # --- configuracao do drive (0, 1, 2, 3, 13, 15, 16, 24) ---
-    ("corrente_ma",     "corr_pico",       1000),
+    # --- configuracao do drive (1, 2, 3, 13, 15, 16, 24, 26) ---
+    ("corrente_pct",    "corr_oper_pct",     50),
     ("standby_pct",     "corr_standby",      50),
     ("standby_ms",      "standby_ms",       300),
     ("malha",           "modo_malha",  MALHA_ABERTA),
@@ -97,6 +97,7 @@ RUNTIME = {
     # ninguem conferiu contra este motor.
     "corrente_lida": False,
     "ppr_lido": None,       # pulsos por volta que o drive respondeu em 1
+    "pico_lido": None,      # corrente de pico (0) que o drive respondeu, mA
 }
 
 # Campos de texto que so aceitam valores de uma lista fechada.

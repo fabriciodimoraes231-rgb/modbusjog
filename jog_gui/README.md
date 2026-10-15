@@ -21,7 +21,7 @@ citada neste documento é desse manual.
 | `ui/` | a interface: um módulo por card da tela |
 | `scripts/` | rotinas de bancada (pick and place, corrente, desabilitação) |
 | `tests/` | testes sem drive, sem porta e sem display |
-| `eixos.json` | o cadastro dos eixos e toda a configuração de cada um |
+| `eixos.json` | o cadastro dos eixos e toda a configuração de cada um — criado pela tela, fora do Git |
 
 ## Como rodar
 
@@ -120,7 +120,7 @@ trava isso.
 | EIXOS DO BARRAMENTO | cadastro (ID + apelido), varredura de 1 a 31 |
 | CONEXÃO RS485 | porta, baud rate e o eixo ativo |
 | MOTOR | habilita/desabilita (reg 6), limpa falha (reg 93), trava do último degrau da parada |
-| CONFIGURAÇÃO DO DRIVE | corrente de pico (0), pulsos/volta (1), standby (2, 3), autoajuste e Kp/Ki (13, 15, 16), malha (24) |
+| CONFIGURAÇÃO DO DRIVE | corrente (26, com o pico resultante lido no 0), pulsos/volta (1), standby (2, 3), autoajuste e Kp/Ki (13, 15, 16), malha (24) |
 | CONTROLE JOG | sentido FRENTE/TRÁS, velocidade em pulsos/s, rampa e o botão de JOG contínuo |
 | STATUS DO DRIVE | status (75), alarme (115), enable (6), contador (39/40), encoder (41/42), tensão (48), corrente efetiva (22) |
 | HOMING | modelo e entrada do sensor, nível (73), filtro (74), teste do sensor, retorno ao zero |
@@ -203,7 +203,7 @@ pergunta em vez de esperar um tempo fixo.
 - Se o 90 já estava em 1 antes do pedido e continua em 1 sem passar por 0, o
   log avisa que a confirmação é ambígua.
 - **Testar gravação** só roda com o motor desabilitado e nada em movimento. Lê
-  os 8 registradores da tabela abaixo, pede para **desligar e religar a
+  os 9 registradores da tabela abaixo, pede para **desligar e religar a
   alimentação** do drive (prazo de 120 s), percebe o religamento pelo próprio
   barramento — só conta como desligado depois de 1 s seguido sem resposta — e
   compara registrador por registrador. O monitor é pausado durante o teste e
@@ -213,14 +213,20 @@ pergunta em vez de esperar um tempo fixo.
 
 | Registrador | Campo | Faixa / fábrica |
 |---|---|---|
-| 0 | corrente de pico | 50~7800 mA / 3000 |
+| 0 | corrente de pico — **só leitura nesta bancada** | 50~7800 mA / 3000 |
 | 1 | pulsos por volta | 200~51 200 / 6000 |
 | 2 | tempo até o standby | 100~10 000 ms / 300 |
 | 3 | corrente de standby | 0~100 % / 50 |
 | 13 | autoajuste da malha de corrente | 0/1 / 1 |
 | 15, 16 | Kp, Ki da malha de corrente | 10~32 767 / 1000; 0~32 767 / 200 |
 | 24 | malha | 1 aberta, 2 fechada / 2 |
+| 26 | corrente operacional — **é o que ajusta a corrente** | 0~100 % / não informado |
 
+- **A corrente se ajusta pelo reg 26**, não pelo 0. Na bancada o drive ecoa a
+  escrita no 0 e mantém o valor; escrever o 26 muda o 0. O card grava o 26 e
+  mostra o pico que o drive informa no 0, sempre lido, nunca calculado — a
+  relação entre os dois não está no manual. O log da gravação registra o pico
+  resultante.
 - **Gravar exige ter lido antes**: sem leitura daquele drive, a gravação pede
   confirmação explícita mostrando a corrente que seria escrita.
 - **Kp/Ki** só são gravados com a trava *"permitir gravar os ganhos"* **e** o
@@ -317,6 +323,8 @@ por vez**.
 
 Guarda versão (`4`), eixo ativo e uma entrada por eixo com `id`, `apelido` e
 `config`. É gravado ao trocar de eixo, em *Salvar limites* e ao fechar a janela.
+**Não vai para o Git**: cada máquina tem o próprio cadastro. Sem o arquivo, a
+tela abre com um eixo no endereço 1.
 Um arquivo de **outra versão** tem outras unidades: dele só se aproveitam `id`,
 `apelido` e `sensor_tipo`; o resto entra com os padrões (o log avisa).
 

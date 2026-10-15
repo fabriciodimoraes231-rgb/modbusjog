@@ -5,3 +5,6 @@ __pycache__/
 # estudo interno de troca de driver.
 jog_gui/Manual-DRIVER-STR6-RS485.pdf
 jog_gui/ESTUDO-DRIVER-STR6-VS-CL57R.md
+
+# Cadastro dos eixos: cada maquina tem o seu, gravado pela propria tela.
+jog_gui/eixos.json

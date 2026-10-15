@@ -591,6 +591,7 @@ class DrivesMixin:
         self._realcar_eixo_ativo()
         self._atualizar_painel_sensor()
         self._badge_malha()
+        self._mostrar_pico()
         self._curso_resumo()
         self._salvar_eixos()
 

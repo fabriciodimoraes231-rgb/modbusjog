@@ -40,7 +40,9 @@ from jog_gui.str6 import drive as modulo_drive
 
 
 # Padrao de fabrica dos registradores de configuracao (manual p. 13)
-FABRICA = {0: 3000, 1: 6000, 2: 300, 3: 50, 13: 1, 15: 1000, 16: 200, 24: 2}
+# O manual nao da o padrao do 26: o 100 e so do simulador.
+FABRICA = {0: 3000, 1: 6000, 2: 300, 3: 50, 13: 1, 15: 1000, 16: 200, 24: 2,
+           26: 100}
 
 
 class BarramentoFalso:
@@ -192,7 +194,7 @@ class TestDrive(SemEspera):
         self.assertTrue(Drive(bus, 1, log=log.append).salvar_parametros())
         self.assertFalse(any("ja estava em 1" in m for m in log))
 
-    def test_ler_configuracao_traz_os_oito_registradores(self):
+    def test_ler_configuracao_traz_os_registradores_da_configuracao(self):
         bus = BarramentoFalso()
         bus.regs[REG_CORRENTE_PICO] = 1500
         cfg = Drive(bus, 1).ler_configuracao()

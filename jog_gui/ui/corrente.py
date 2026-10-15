@@ -5,8 +5,6 @@ import tkinter as tk
 from tkinter import messagebox
 
 from jog_gui.str6 import (
-    CORRENTE_MAX_MA,
-    CORRENTE_MIN_MA,
     MALHA_ABERTA,
     MALHA_FECHADA,
     MALHAS,
@@ -14,6 +12,7 @@ from jog_gui.str6 import (
     PULSOS_VOLTA_MIN,
     REG_AUTOAJUSTE,
     REG_CORRENTE_EFETIVA,
+    REG_CORRENTE_OPER_PCT,
     REG_CORRENTE_PICO,
     REG_ENABLE,
     REG_KI,
@@ -52,6 +51,7 @@ from .tema import (
 _NOMES = {
     REG_MALHA: "Malha",
     REG_CORRENTE_PICO: "Corrente de pico",
+    REG_CORRENTE_OPER_PCT: "Corrente operacional",
     REG_PULSOS_VOLTA: "Pulsos por volta",
     REG_STANDBY_TEMPO: "Tempo de standby",
     REG_STANDBY_PCT: "Corrente de standby",
@@ -108,21 +108,18 @@ class CorrenteMixin:
         self.lbl_malha_aviso.pack(fill="x")
         self.modo_malha.trace_add("write", lambda *_: self._badge_malha())
 
-        # Corrente de pico (0)
-        row = tk.Frame(f, bg=BG2)
-        row.pack(fill="x", pady=2)
-        tk.Label(row, text="Corrente de pico:", bg=BG2, fg=TEXT, font=FONT_LABEL,
-                 width=16, anchor="w").pack(side="left")
-        self.lbl_corr_pico = tk.Label(row, text=amperes_txt(self.corr_pico.get()),
-                                      bg=BG2, fg=ACCENT, font=FONT_BOLD, width=15)
-        self.lbl_corr_pico.pack(side="right")
-        tk.Scale(row, from_=CORRENTE_MIN_MA, to=CORRENTE_MAX_MA, resolution=50,
-                 orient="horizontal", variable=self.corr_pico, bg=BG2, fg=TEXT,
-                 troughcolor=BG3, highlightthickness=0, sliderlength=18,
-                 showvalue=False,
-                 command=lambda v: self.lbl_corr_pico.config(
-                     text=amperes_txt(int(float(v))))).pack(
-                         side="left", fill="x", expand=True)
+        # Corrente: ajustada pelo 26. Na bancada o drive ecoa a escrita no 0 e
+        # mantem o valor, e o 0 muda quando se escreve o 26 -- entao a tela
+        # grava o 26 e mostra o 0 que o drive informa. A relacao entre os dois
+        # nao esta no manual: o pico mostrado e sempre o LIDO, nunca calculado.
+        row = _linha("Corrente:")
+        _spin(row, self.corr_oper_pct, 0, 100, "%  (reg 26)")
+        row = _linha("Pico (reg 0):")
+        self.lbl_corr_pico = tk.Label(row, text="?  -  Ler do Drive", bg=BG2,
+                                      fg=ACCENT, font=FONT_BOLD, anchor="w")
+        self.lbl_corr_pico.pack(side="left")
+        tk.Label(row, text="lido do drive", bg=BG2, fg=TEXT_DIM,
+                 font=FONT_LABEL).pack(side="left", padx=6)
 
         row = _linha("Standby:")
         _spin(row, self.corr_standby, 0, 100, "%  (reg 3)")
@@ -257,7 +254,7 @@ class CorrenteMixin:
         self._thread_op(self._do_ler_correntes)
 
     def _do_ler_correntes(self):
-        """Le 0~3, 13, 15~16, 22 e 24, aplica na tela e so entao libera gravar.
+        """Le 0~3, 13, 15~16, 22, 24 e 26, aplica na tela e so entao libera gravar.
 
         A leitura e o que marca `corrente_lida`: enquanto ela nao acontecer, o
         que esta na tela e o padrao e nao o que este drive tem.
@@ -278,9 +275,12 @@ class CorrenteMixin:
         auto = self._ler_regs(REG_AUTOAJUSTE, 1)
         ganhos = self._ler_regs(REG_KP, 2)
         efetiva = self._ler_regs(REG_CORRENTE_EFETIVA, 1)
+        oper = self._ler_regs(REG_CORRENTE_OPER_PCT, 1)
 
-        self._log("[CFG-R] Pico={} | Pulsos/volta={} | Standby={}% apos {} ms | "
-                  "Malha={} | Autoajuste={} | Kp/Ki={} | Corrente efetiva={}".format(
+        self._log("[CFG-R] Corrente={} (reg 26) -> pico={} | Pulsos/volta={} | "
+                  "Standby={}% apos {} ms | Malha={} | Autoajuste={} | Kp/Ki={} | "
+                  "Corrente efetiva={}".format(
+                      "?" if oper is None else "{}%".format(oper[0]),
                       amperes_txt(pico), ppr, standby_pct, standby_ms,
                       "?" if malha is None else MALHAS.get(malha[0], malha[0]),
                       "?" if auto is None else auto[0],
@@ -296,6 +296,7 @@ class CorrenteMixin:
             # desses numeros no drive errado.
             self._runtime_de(alvo, "corrente_lida", True, escrever=True)
             self._runtime_de(alvo, "ppr_lido", ppr, escrever=True)
+            self._runtime_de(alvo, "pico_lido", pico, escrever=True)
             if malha is not None:
                 self._runtime_de(alvo, "malha_lida", malha[0], escrever=True)
             if self._slave_operacao() != alvo:
@@ -303,8 +304,9 @@ class CorrenteMixin:
                           "ja mostra o eixo {} - tela nao atualizada".format(
                               alvo, self._slave_operacao()))
                 return
-            self.corr_pico.set(pico)
-            self.lbl_corr_pico.config(text=amperes_txt(pico))
+            self._mostrar_pico()
+            if oper is not None:
+                self.corr_oper_pct.set(oper[0])
             self.corr_standby.set(standby_pct)
             self.standby_ms.set(standby_ms)
             self._ppr_lido_do_drive(alvo, ppr)
@@ -317,9 +319,23 @@ class CorrenteMixin:
                 self.ganho_p.set(ganhos[0])
                 self.ganho_i.set(ganhos[1])
             self.lbl_corr_status.config(
-                text="Lido: pico {:.2f} A | {} p/volta | standby {}%".format(
-                    pico / 1000.0, ppr, standby_pct), fg=GREEN)
+                text="Lido: corrente {} -> pico {:.2f} A | {} p/volta | "
+                     "standby {}%".format(
+                         "?" if oper is None else "{}%".format(oper[0]),
+                         pico / 1000.0, ppr, standby_pct), fg=GREEN)
         self.after(0, _apply)
+
+    def _mostrar_pico(self):
+        """Pinta a corrente de pico (0) que o drive do eixo ativo informou.
+
+        E leitura, nunca o que a tela pediu: o 0 e o efeito do 26 no drive.
+        Na thread da interface.
+        """
+        if not hasattr(self, "lbl_corr_pico"):
+            return
+        pico = self._runtime("pico_lido")
+        self.lbl_corr_pico.config(
+            text="?  -  Ler do Drive" if pico is None else amperes_txt(pico))
 
     def _ganhos_padrao(self):
         """Repoe os valores de fabrica do manual (p. 13) nos campos da tela."""
@@ -335,10 +351,7 @@ class CorrenteMixin:
         """Confere o que vai ser gravado, pede confirmacao quando preciso e
         dispara a gravacao em thread.
 
-        So com o motor desabilitado e nada em movimento: na bancada o drive
-        ecoou a escrita da corrente de pico com o motor habilitado e manteve o
-        valor antigo. Que o motor habilitado seja a causa e hipotese ainda nao
-        confirmada -- mas gravar desabilitado tira essa duvida do caminho.
+        So com o motor desabilitado e nada em movimento.
 
         Duas confirmacoes, ambas na thread da interface:
           - configuracao que nao veio de uma leitura deste drive;
@@ -355,21 +368,19 @@ class CorrenteMixin:
             messagebox.showwarning(
                 "Gravar e Salvar",
                 "Pare o movimento e desabilite o motor (MOTOR OFF) antes de "
-                "gravar a configuracao.\n\nCom o motor habilitado o drive pode "
-                "confirmar a escrita da corrente sem aplica-la.\n\nNum eixo "
-                "vertical, apoie a carga antes do MOTOR OFF.")
+                "gravar a configuracao.\n\nNum eixo vertical, apoie a carga "
+                "antes do MOTOR OFF.")
             return
 
-        pico = max(CORRENTE_MIN_MA, min(CORRENTE_MAX_MA,
-                                        self._ivar(self.corr_pico, 1000)))
+        pct = max(0, min(100, self._ivar(self.corr_oper_pct, 50)))
         if not self.corrente_lida:
             if not messagebox.askyesno(
                     "Gravar sem ter lido",
                     "A configuracao na tela do eixo {} nao veio de uma leitura "
-                    "deste drive.\n\nGravar agora escreve corrente de pico "
-                    "{:.2f} A e {}.\n\nSe esses numeros nao foram medidos para "
+                    "deste drive.\n\nGravar agora escreve corrente {}% (reg "
+                    "26) e {}.\n\nSe esses numeros nao foram medidos para "
                     "este motor, use 'Ler do Drive' antes.\n\nGravar mesmo "
-                    "assim?".format(self.slave.get(), pico / 1000.0,
+                    "assim?".format(self.slave.get(), pct,
                                     MALHAS.get(self._ivar(self.modo_malha), "?"))):
                 self.lbl_corr_status.config(
                     text="Gravacao cancelada - leia do drive primeiro", fg=YELLOW)
@@ -397,7 +408,7 @@ class CorrenteMixin:
 
         cfg = {
             "malha": self._ivar(self.modo_malha, MALHA_ABERTA),
-            "pico": pico,
+            "corrente_pct": pct,
             "ppr": ppr_tela if gravar_ppr else None,
             "standby_ms": max(STANDBY_TEMPO_MIN, min(STANDBY_TEMPO_MAX,
                                                      self._ivar(self.standby_ms, 300))),
@@ -440,7 +451,7 @@ class CorrenteMixin:
         """
         regs = [
             (REG_MALHA, cfg["malha"]),
-            (REG_CORRENTE_PICO, cfg["pico"]),
+            (REG_CORRENTE_OPER_PCT, cfg["corrente_pct"]),
             (REG_STANDBY_TEMPO, cfg["standby_ms"]),
             (REG_STANDBY_PCT, cfg["standby_pct"]),
             (REG_AUTOAJUSTE, cfg["auto"]),
@@ -458,8 +469,8 @@ class CorrenteMixin:
                 self._log("[CFG-W] Gravacao dos ganhos liberada pelo operador")
 
         # O MOTOR OFF da tela e estado desta sessao; o drive pode estar
-        # habilitado mesmo assim (o 6 vem de fabrica em 1). O que vale para
-        # interpretar uma corrente nao aceita e o que o drive informa.
+        # habilitado mesmo assim (o 6 vem de fabrica em 1). Fica no log como
+        # registro da condicao da gravacao.
         enable = self._ler_regs(REG_ENABLE, 1)
         enable = None if enable is None else enable[0]
         self._log("[CFG-W] Enable (reg 6) antes de gravar: {}".format(
@@ -484,19 +495,11 @@ class CorrenteMixin:
             self._log("[CFG-W] {} (reg {}) = {}: {}".format(
                 _NOMES[reg], reg, _texto_valor(reg, val), estado))
 
-        if any(reg == REG_CORRENTE_PICO for reg, _, _ in nao_aceitos):
-            if enable == 0:
-                self._log("[CFG-W] Corrente de pico nao aceita com o drive "
-                          "informando enable = 0. O atributo do reg 0 esta em "
-                          "branco no manual (p. 13): ele pode nao ser gravavel "
-                          "por RS-485. Leia os regs 4 (chave rotativa), 26 e 135 "
-                          "no inspetor e confirme com o fabricante.")
-            else:
-                self._log("[CFG-W] Corrente de pico nao aceita, mas o drive "
-                          "informa enable = {} (reg 6): este ensaio nao descarta "
-                          "o motor habilitado como causa. Leve o reg 6 a 0 "
-                          "(MOTOR ON e MOTOR OFF) e grave de novo.".format(
-                              "?" if enable is None else enable))
+        # O 0 nao e escrito: e o efeito do 26. Le-lo aqui mostra no log o
+        # que a corrente pedida virou no drive.
+        pico = self._ler_regs(REG_CORRENTE_PICO, 1)
+        self._log("[CFG-W] Corrente de pico resultante (reg 0): {}".format(
+            "sem resposta" if pico is None else amperes_txt(pico[0])))
 
         if erros:
             # Salvar agora levaria para a memoria uma configuracao pela metade
@@ -526,7 +529,7 @@ class CorrenteMixin:
             for i, reg in enumerate((REG_CORRENTE_PICO, REG_PULSOS_VOLTA,
                                      REG_STANDBY_TEMPO, REG_STANDBY_PCT)):
                 conferido[reg] = base[i]
-        for reg in (REG_MALHA, REG_AUTOAJUSTE):
+        for reg in (REG_MALHA, REG_AUTOAJUSTE, REG_CORRENTE_OPER_PCT):
             v = self._ler_regs(reg, 1)
             if v is not None:
                 conferido[reg] = v[0]
@@ -574,7 +577,7 @@ class CorrenteMixin:
         """
         if self._slave_operacao() != alvo:
             return
-        for reg, var in ((REG_CORRENTE_PICO, self.corr_pico),
+        for reg, var in ((REG_CORRENTE_OPER_PCT, self.corr_oper_pct),
                          (REG_STANDBY_TEMPO, self.standby_ms),
                          (REG_STANDBY_PCT, self.corr_standby),
                          (REG_MALHA, self.modo_malha),
@@ -587,7 +590,10 @@ class CorrenteMixin:
             self._ppr_lido_do_drive(alvo, conferido[REG_PULSOS_VOLTA])
         if REG_MALHA in conferido:
             self._badge_malha(conferido[REG_MALHA], slave=alvo)
-        self.lbl_corr_pico.config(text=amperes_txt(self.corr_pico.get()))
+        if REG_CORRENTE_PICO in conferido:
+            self._runtime_de(alvo, "pico_lido", conferido[REG_CORRENTE_PICO],
+                             escrever=True)
+            self._mostrar_pico()
         self._curso_resumo()
 
     # --- TESTE DE GRAVACAO (religamento) ---------------------------------------
@@ -738,13 +744,16 @@ def _texto_valor(reg, valor):
         return amperes_txt(valor)
     if reg == REG_MALHA:
         return "{} ({})".format(valor, MALHAS.get(valor, "?"))
+    if reg == REG_CORRENTE_OPER_PCT:
+        return "{}%".format(valor)
     return str(valor)
 
 
 def _resumo_configuracao(cfg):
     """Uma linha com a configuracao lida, para o log."""
-    return ("pico {} | {} p/volta | standby {}% apos {} ms | {} | autoajuste {} "
-            "| Kp/Ki {}/{}".format(
+    return ("corrente {}% -> pico {} | {} p/volta | standby {}% apos {} ms | {} "
+            "| autoajuste {} | Kp/Ki {}/{}".format(
+                cfg[REG_CORRENTE_OPER_PCT],
                 amperes_txt(cfg[REG_CORRENTE_PICO]), cfg[REG_PULSOS_VOLTA],
                 cfg[REG_STANDBY_PCT], cfg[REG_STANDBY_TEMPO],
                 MALHAS.get(cfg[REG_MALHA], cfg[REG_MALHA]), cfg[REG_AUTOAJUSTE],
