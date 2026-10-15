@@ -196,9 +196,14 @@ class InspetorMixin:
         self.btn_reg_vigiar.config(text="Parar vigilancia", bg=RED)
         self.lbl_reg_mudanca.config(text="Vigiando o reg {}...".format(reg),
                                     fg=YELLOW)
-        self._log("[REG] Vigiando o reg {} a cada {} ms".format(
-            reg, self._ivar(self.reg_intervalo, 500)))
+        self._log("[REG] Vigiando o reg {} a cada {:.0f} ms".format(
+            reg, self._reg_intervalo_s() * 1000))
         self._thread_op(self._reg_loop_vigia, reg)
+
+    def _reg_intervalo_s(self):
+        """Intervalo da vigilancia em segundos; nunca abaixo de 200 ms, para
+        nao tomar o barramento do monitor."""
+        return max(0.2, self._ivar(self.reg_intervalo, 500) / 1000.0)
 
     def _reg_loop_vigia(self, reg: int):
         """
@@ -207,21 +212,27 @@ class InspetorMixin:
         Le so 1 registrador por vez de proposito: quem esta investigando quer
         saber daquele endereco, e um quadro curto disputa menos o barramento
         com o monitor de status.
+
+        O ultimo valor visto e LOCAL a este laco: um "Ler agora" de outro
+        endereco durante a vigilancia sobrescreve `_reg_ultimo`, e comparar
+        com ele anunciava "75 mudou: 3 -> 160" com o 3 vindo do reg 73.
         """
-        intervalo = max(0.2, self._ivar(self.reg_intervalo, 500) / 1000.0)
+        intervalo = self._reg_intervalo_s()
         falhas = 0
+        ultimo = None
         while self.reg_vigiando and self._conectado:
             vals = self._ler_regs(reg, 1)
             if vals is None:
                 falhas += 1
                 if falhas == 3:
-                    self._log("[REG] reg {} sem resposta - o drive pode estar "
-                              "gravando; a vigilancia continua".format(reg))
+                    self._log("[REG] reg {} sem resposta em 3 leituras seguidas "
+                              "(barramento ocupado, cabo ou drive); a vigilancia "
+                              "continua".format(reg))
                 time.sleep(intervalo)
                 continue
             falhas = 0
             valor = vals[0]
-            anterior = self._reg_ultimo
+            anterior, ultimo = ultimo, valor
             if anterior is None or valor != anterior:
                 if anterior is not None:
                     self._reg_mudancas += 1
