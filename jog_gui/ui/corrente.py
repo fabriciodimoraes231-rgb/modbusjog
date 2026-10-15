@@ -453,6 +453,14 @@ class CorrenteMixin:
                 regs += [(REG_KP, cfg["kp"]), (REG_KI, cfg["ki"])]
                 self._log("[CFG-W] Gravacao dos ganhos liberada pelo operador")
 
+        # O MOTOR OFF da tela e estado desta sessao; o drive pode estar
+        # habilitado mesmo assim (o 6 vem de fabrica em 1). O que vale para
+        # interpretar uma corrente nao aceita e o que o drive informa.
+        enable = self._ler_regs(REG_ENABLE, 1)
+        enable = None if enable is None else enable[0]
+        self._log("[CFG-W] Enable (reg 6) antes de gravar: {}".format(
+            "sem resposta" if enable is None else enable))
+
         erros = 0
         nao_aceitos = []             # [(reg, pedido, lido)] na releitura imediata
         for reg, val in regs:
@@ -473,11 +481,18 @@ class CorrenteMixin:
                 _NOMES[reg], reg, _texto_valor(reg, val), estado))
 
         if any(reg == REG_CORRENTE_PICO for reg, _, _ in nao_aceitos):
-            self._log("[CFG-W] Corrente de pico nao aceita com o motor "
-                      "desabilitado. O atributo do reg 0 esta em branco no "
-                      "manual (p. 13): ele pode nao ser gravavel por RS-485. "
-                      "Leia os regs 4 (chave rotativa), 26 e 135 no inspetor e "
-                      "confirme com o fabricante.")
+            if enable == 0:
+                self._log("[CFG-W] Corrente de pico nao aceita com o drive "
+                          "informando enable = 0. O atributo do reg 0 esta em "
+                          "branco no manual (p. 13): ele pode nao ser gravavel "
+                          "por RS-485. Leia os regs 4 (chave rotativa), 26 e 135 "
+                          "no inspetor e confirme com o fabricante.")
+            else:
+                self._log("[CFG-W] Corrente de pico nao aceita, mas o drive "
+                          "informa enable = {} (reg 6): este ensaio nao descarta "
+                          "o motor habilitado como causa. Leve o reg 6 a 0 "
+                          "(MOTOR ON e MOTOR OFF) e grave de novo.".format(
+                              "?" if enable is None else enable))
 
         if erros or nao_aceitos:
             # Salvar agora levaria para a memoria uma configuracao pela metade
