@@ -419,7 +419,7 @@ class EixoMovimento:
         morrer ou o cabo cair, nada aqui roda e o drive segue o ultimo comando
         continuo que recebeu.
         """
-        self.log("[STOP] {} -> parando o eixo {}".format(
+        self.log("[STOP] {} -> parando o {}".format(
             motivo, self.config.apelido))
         self.sentido_mov = None
         if self._escrever_retry(REG_COMANDO, CMD_DESACELERAR):
@@ -489,7 +489,7 @@ class EixoMovimento:
             self.sentido_mov = None
             return Resultado(False, CAUSA_DRIVE_MUDO,
                              "o drive nao confirmou o inicio do JOG")
-        self.log("[JOG] {} {} p/s no eixo {}".format(
+        self.log("[JOG] {} {} p/s no {}".format(
             sentido, pps, self.config.apelido))
         return Resultado(True, detalhe="jog {} {} p/s".format(sentido, pps))
 
@@ -581,7 +581,7 @@ class EixoMovimento:
         """
         if not self.armado:
             return (CAUSA_MOTOR_OFF,
-                    "o motor do eixo {} esta desabilitado: habilite antes de "
+                    "o motor do {} esta desabilitado: habilite antes de "
                     "mover".format(self.config.apelido))
         if not self.config.limites_ativos:
             return None
@@ -758,7 +758,7 @@ class EixoMovimento:
         if not self.armado:
             raise MovimentoRecusado(
                 CAUSA_MOTOR_OFF,
-                "o motor do eixo {} esta desabilitado: habilite antes de mover"
+                "o motor do {} esta desabilitado: habilite antes de mover"
                 .format(self.config.apelido))
 
         tamanho = abs(self.config.passo_pulsos if pulsos is None else pulsos)
@@ -809,7 +809,7 @@ class EixoMovimento:
         if not self.armado:
             raise MovimentoRecusado(
                 CAUSA_MOTOR_OFF,
-                "o motor do eixo {} esta desabilitado: habilite antes de mover"
+                "o motor do {} esta desabilitado: habilite antes de mover"
                 .format(self.config.apelido))
 
         neg, pmax = self.faixa
@@ -878,7 +878,7 @@ class EixoMovimento:
         if not self.armado:
             raise MovimentoRecusado(
                 CAUSA_MOTOR_OFF,
-                "habilite o motor do eixo {} antes de detectar o sentido"
+                "habilite o motor do {} antes de detectar o sentido"
                 .format(self.config.apelido))
         self._reiniciar_cancelamento()
         tolerancia = self.config.tolerancia if tolerancia is None else tolerancia
@@ -913,12 +913,12 @@ class EixoMovimento:
         if not self.config.sensor_tem_origem:
             raise MovimentoRecusado(
                 CAUSA_SEM_SENSOR,
-                "eixo {} esta marcado como SEM SENSOR de origem: nao ha zero a "
+                "{} esta marcado como SEM SENSOR de origem: nao ha zero a "
                 "estabelecer".format(self.config.apelido))
         if not self.armado:
             raise MovimentoRecusado(
                 CAUSA_MOTOR_OFF,
-                "habilite o motor do eixo {} antes do homing"
+                "habilite o motor do {} antes do homing"
                 .format(self.config.apelido))
 
     def _sensor_e_falha(self):
@@ -1028,7 +1028,7 @@ class EixoMovimento:
         v_apr = self._vel(self.config.home_v_apr)
         v_ras = self._vel(min(self.config.home_v_ras, v_apr))
 
-        self.log("[HOME-SW] eixo {}: busca no {}, {} a {} p/s, rastejo {} p/s"
+        self.log("[HOME-SW] {}: busca no {}, {} a {} p/s, rastejo {} p/s"
                  .format(self.config.apelido, self.config.home_entrada,
                          sentido, v_apr, v_ras))
 
@@ -1085,7 +1085,7 @@ class EixoMovimento:
         v_ras = self._vel(min(self.config.home_v_ras, v_apr))
         modo = (HOME_LIMITE_POS if self.config.home_entrada == ENTRADA_LIM_POS
                 else HOME_LIMITE_NEG)
-        self.log("[HOME] eixo {}: retorno a zero do drive, 71 = {} ({}), "
+        self.log("[HOME] {}: retorno a zero do drive, 71 = {} ({}), "
                  "aproximacao {} p/s, retorno {} p/s".format(
                      self.config.apelido, modo, self.config.home_entrada,
                      v_apr, v_ras))
