@@ -190,11 +190,14 @@ pergunta em vez de esperar um tempo fixo.
   movimento. Na bancada, o drive ecoou a escrita do reg 0 com o motor
   habilitado e manteve o valor antigo; se a causa é o motor habilitado ainda
   não está confirmado. O monitor é pausado durante a gravação e retomado no fim.
-- Se **qualquer** escrita for recusada, ou se a releitura mostrar que o drive
-  manteve o valor antigo, o salvamento **não é feito**: salvar levaria para a
-  memória uma configuração pela metade (por exemplo, a malha nova com a
-  corrente antiga). O que o drive aceitou vale só até ele ser desligado. Os
-  campos passam a mostrar o valor do drive, então gravar de novo salva o resto.
+- Se **qualquer** escrita for recusada (exceção ou silêncio), o salvamento
+  **não é feito**: salvar levaria para a memória uma configuração pela metade
+  (por exemplo, a malha nova com a corrente antiga). O que o drive aceitou vale
+  só até ele ser desligado.
+- Se o drive ecoar a escrita mas a releitura mostrar o valor antigo, o resto
+  **é salvo** e o log nomeia o registrador que ficou com o valor do drive. Na
+  bancada o reg 0 nunca aceita; barrar o salvamento por ele fazia todos os
+  outros valores se perderem ao religar.
 - A espera pelo 90 conta **consultas** (uma a cada 0,2 s, `ESPERA_SALVAR` ao
   todo), não relógio: tempo na fila do barramento não esgota o prazo.
 - Se o 90 já estava em 1 antes do pedido e continua em 1 sem passar por 0, o
