@@ -425,13 +425,17 @@ class CorrenteMixin:
 
         Cada registrador e relido logo depois de escrito. O eco do FC06 so
         prova que o quadro chegou; a releitura imediata separa "o drive nao
-        aceitou o valor" de "o salvamento desfez o valor". Valor nao aceito
-        barra o salvamento pelo mesmo motivo de uma escrita recusada: salvar
-        levaria para a memoria uma configuracao pela metade.
+        aceitou o valor" de "o salvamento desfez o valor".
+
+        Escrita RECUSADA (excecao ou silencio) barra o salvamento: nao se sabe
+        o que o drive ficou tendo. Valor NAO ACEITO (eco ok, releitura com o
+        valor antigo) nao barra: o drive manteve um valor conhecido, e barrar
+        deixaria todos os outros registradores sem salvar -- na bancada o reg 0
+        nunca aceita, e assim nada sobrevivia a um religamento. O log e a
+        mensagem nomeiam o registrador que ficou com o valor do drive.
 
         Depois do salvamento, rele tudo e compara com o que foi pedido. Os
-        campos passam a mostrar o valor real do drive, nao o digitado -- e e
-        isso que permite gravar de novo sem o registrador que nao aceitou.
+        campos passam a mostrar o valor real do drive, nao o digitado.
         Roda em thread.
         """
         regs = [
@@ -494,15 +498,19 @@ class CorrenteMixin:
                           "(MOTOR ON e MOTOR OFF) e grave de novo.".format(
                               "?" if enable is None else enable))
 
-        if erros or nao_aceitos:
+        if erros:
             # Salvar agora levaria para a memoria uma configuracao pela metade
             # -- por exemplo a malha nova com a corrente antiga.
             ok_save = False
-            self._log("[CFG-W] {} escrita(s) recusada(s) e {} valor(es) nao "
-                      "aceito(s): o salvamento (reg 90) NAO foi feito. O que o "
-                      "drive aceitou vale so ate ele ser desligado.".format(
-                          erros, len(nao_aceitos)))
+            self._log("[CFG-W] {} escrita(s) recusada(s): o salvamento (reg 90) "
+                      "NAO foi feito. O que o drive aceitou vale so ate ele ser "
+                      "desligado.".format(erros))
         else:
+            if nao_aceitos:
+                self._log("[CFG-W] Salvando o que o drive aceitou; {} fica(m) "
+                          "com o valor do drive".format(", ".join(
+                              "reg {} = {}".format(r, _texto_valor(r, lido))
+                              for r, _, lido in nao_aceitos)))
             ok_save = self._salvar_parametros()
         alvo = self._slave_atual
         if cfg["ppr"] is not None:
@@ -543,8 +551,10 @@ class CorrenteMixin:
                 erros), RED
         elif nao_aceitos:
             nomes = ", ".join("reg {}".format(r) for r, _, _ in nao_aceitos)
-            msg, cor = ("{} nao aceitou o valor - nada foi salvo. A tela mostra "
-                        "o valor do drive".format(nomes)), YELLOW
+            msg, cor = ("{} nao aceitou o valor (ficou o do drive); o resto foi "
+                        "{}".format(nomes, "salvo (reg 90)" if ok_save else
+                                    "gravado, mas o salvamento (reg 90) nao "
+                                    "confirmou")), YELLOW
         elif divergentes:
             nomes = ", ".join("reg {}".format(r) for r, _, _ in divergentes)
             msg, cor = ("{} voltou diferente na conferencia depois do "
