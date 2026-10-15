@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+
+# Fora do repositorio publico: manual do fabricante (direitos da Kalatec) e
+# estudo interno de troca de driver.
+jog_gui/Manual-DRIVER-STR6-RS485.pdf
+jog_gui/ESTUDO-DRIVER-STR6-VS-CL57R.md
