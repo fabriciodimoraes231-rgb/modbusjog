@@ -27,6 +27,7 @@ from jog_gui.str6.protocolo import (
     palavras_32,
     parse_read_response,
 )
+from jog_gui.str6 import registradores
 from jog_gui.str6.registradores import (
     REG_COMANDO,
     REG_CORRENTE_PICO,
@@ -324,6 +325,39 @@ class TestIntegracaoQuadros(unittest.TestCase):
             self.assertEqual(build_read_regs(slave, REG_STATUS, 1)[0], slave)
             self.assertEqual(build_write_single(slave, REG_ENABLE, 1)[0], slave)
             self.assertEqual(build_write_multi(slave, REG_CURSO_L, [0])[0], slave)
+
+
+class TestBit7(unittest.TestCase):
+    """Polaridade do bit 7 do status (75): o manual se contradiz (p. 17)."""
+
+    def setUp(self):
+        self._polaridade = registradores.BIT7_UM_E_CONCLUIDO
+
+    def tearDown(self):
+        registradores.BIT7_UM_E_CONCLUIDO = self._polaridade
+
+    def test_um_e_concluido_le_0x0080_como_parado(self):
+        # O que a bancada leu com o motor parado (16/10)
+        registradores.BIT7_UM_E_CONCLUIDO = True
+        self.assertFalse(registradores.em_movimento(0x0080))
+        self.assertTrue(registradores.em_movimento(0x0000))
+        self.assertNotIn("em movimento", registradores.nomes_status(0x0080))
+
+    def test_polaridade_do_manual_le_0x0080_como_movendo(self):
+        registradores.BIT7_UM_E_CONCLUIDO = False
+        self.assertTrue(registradores.em_movimento(0x0080))
+        self.assertFalse(registradores.em_movimento(0x0000))
+
+    def test_bit7_para_e_o_inverso_de_em_movimento(self):
+        for polaridade in (True, False):
+            registradores.BIT7_UM_E_CONCLUIDO = polaridade
+            for movendo in (True, False):
+                self.assertEqual(registradores.em_movimento(
+                    registradores.bit7_para(movendo)), movendo)
+
+    def test_outros_bits_nao_mudam_a_leitura(self):
+        registradores.BIT7_UM_E_CONCLUIDO = True
+        self.assertFalse(registradores.em_movimento(0x0080 | 0x0030))
 
 
 if __name__ == "__main__":

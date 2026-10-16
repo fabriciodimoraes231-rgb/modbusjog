@@ -217,6 +217,21 @@ class TestDrive(SemEspera):
         bus.salvar_demora = 10 ** 9
         self.assertFalse(Drive(bus, 1).salvar_parametros(espera=0.0))
 
+    def test_salvar_sem_confirmacao_registra_o_que_o_90_devolveu(self):
+        # Na bancada o 90 nunca chegou a 1: o log tem de separar "sempre 0"
+        # de "mudo", que apontam causas diferentes.
+        bus = BarramentoFalso()
+        bus.salvar_demora = 10 ** 9
+        log = []
+        self.assertFalse(Drive(bus, 1, log=log.append).salvar_parametros(
+            espera=1.0))
+        self.assertTrue(any("Nas 5 consultas: 0 x5" in m for m in log), log)
+
+    def test_resumir_leituras_agrupa_valores_repetidos(self):
+        self.assertEqual(modulo_drive._resumir_leituras([0, 0, None, None, 0]),
+                         "0 x2, mudo x2, 0 x1")
+        self.assertEqual(modulo_drive._resumir_leituras([]), "nenhuma")
+
     def test_salvar_desiste_depois_das_consultas_do_prazo(self):
         bus = BarramentoFalso()
         bus.salvar_demora = 10 ** 9

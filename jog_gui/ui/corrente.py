@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 from jog_gui.str6 import (
+    CORRENTE_MIN_SAIDA_MA,
     MALHA_ABERTA,
     MALHA_FECHADA,
     MALHAS,
@@ -286,6 +287,9 @@ class CorrenteMixin:
                       "?" if auto is None else auto[0],
                       "?" if ganhos is None else "{}/{}".format(*ganhos),
                       "?" if efetiva is None else "{} mA".format(efetiva[0])))
+        aviso = _aviso_pico(pico)
+        if aviso:
+            self._log("[CFG-R] ATENCAO: {}".format(aviso))
         alvo = self._slave_atual
 
         def _apply():
@@ -320,9 +324,11 @@ class CorrenteMixin:
                 self.ganho_i.set(ganhos[1])
             self.lbl_corr_status.config(
                 text="Lido: corrente {} -> pico {:.2f} A | {} p/volta | "
-                     "standby {}%".format(
+                     "standby {}%{}".format(
                          "?" if oper is None else "{}%".format(oper[0]),
-                         pico / 1000.0, ppr, standby_pct), fg=GREEN)
+                         pico / 1000.0, ppr, standby_pct,
+                         "\n" + aviso if aviso else ""),
+                fg=YELLOW if aviso else GREEN)
         self.after(0, _apply)
 
     def _mostrar_pico(self):
@@ -500,6 +506,9 @@ class CorrenteMixin:
         pico = self._ler_regs(REG_CORRENTE_PICO, 1)
         self._log("[CFG-W] Corrente de pico resultante (reg 0): {}".format(
             "sem resposta" if pico is None else amperes_txt(pico[0])))
+        aviso = "" if pico is None else _aviso_pico(pico[0])
+        if aviso:
+            self._log("[CFG-W] ATENCAO: {}".format(aviso))
 
         if erros:
             # Salvar agora levaria para a memoria uma configuracao pela metade
@@ -567,6 +576,8 @@ class CorrenteMixin:
                         "memoria: Testar gravacao"), GREEN
         else:
             msg, cor = "Gravado, mas o salvamento (reg 90) nao confirmou", YELLOW
+        if aviso and not erros:
+            msg, cor = msg + "\n" + aviso, YELLOW
         self._log("[CFG-W] {}".format(msg))
         self.after(0, lambda: self.lbl_corr_status.config(text=msg, fg=cor))
 
@@ -736,6 +747,20 @@ class CorrenteMixin:
         self.btn_testar_grav.config(text="Testar gravacao (religar drive)")
         self._retomar_monitor(self._monitor_pausado_teste)
         self._monitor_pausado_teste = False
+
+
+def _aviso_pico(pico_ma):
+    """Aviso quando o pico lido no 0 fica abaixo da saida minima do drive.
+
+    O registrador aceita o valor, mas o manual (p. 4) da 0,5 A como menor
+    corrente de saida: abaixo disso o motor recebe o piso do drive, nao o
+    numero do 0. Devolve "" quando esta dentro da faixa.
+    """
+    if pico_ma >= CORRENTE_MIN_SAIDA_MA:
+        return ""
+    return ("pico de {} abaixo do minimo de saida do drive ({}, manual p. 4): "
+            "o motor recebe o piso do drive, nao este valor".format(
+                amperes_txt(pico_ma), amperes_txt(CORRENTE_MIN_SAIDA_MA)))
 
 
 def _texto_valor(reg, valor):

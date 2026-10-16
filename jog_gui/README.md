@@ -160,7 +160,9 @@ Tudo em `motion/eixo.py` (manual p. 14–15):
   incremental (72 = 0). O drive desacelera e para sozinho; o que sobra de erro
   é corrigido em até duas tentativas.
 - O fim de um movimento exige o eixo **parado** em duas leituras e, além disso,
-  o bit 7 do status desligado **ou** a posição no destino (ver pontos em aberto).
+  o bit 7 do status dizendo "concluído" **ou** a posição no destino (ver pontos
+  em aberto). A polaridade do bit 7 fica em `BIT7_UM_E_CONCLUIDO`
+  (`str6/registradores.py`): o manual se contradiz, e a bancada leu 1 parado.
 - **Sentido de +**: qual comando (FRENTE ou TRÁS) **soma** pulsos no contador.
   O botão *Detectar sentido +* descobre girando ~1 s para FRENTE. Um passo "+"
   sai sempre no sentido que soma, então segue o contador e não o rótulo.

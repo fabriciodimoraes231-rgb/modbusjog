@@ -135,4 +135,5 @@ __all__ = [
     "VARREDURA_MAX", "ID_NEMA1_SOCKET", "ID_NEMA2_CABEC", "ID_SPIN_MOTOR",
     "MALHA_PADRAO", "PULSOS_VOLTA", "VEL_MAX_PPS", "RAMPA_MS", "ESPERA_SALVAR",
 ] + [n for n in dir(registradores)
-     if n.isupper() or n in ("nome_alarme", "nomes_status")]
+     if n.isupper() or n in ("nome_alarme", "nomes_status", "em_movimento",
+                             "bit7_para")]
