@@ -72,6 +72,18 @@ def comparar_configuracao(esperado, lido):
             if lido.get(reg) != valor]
 
 
+def _resumir_leituras(lidas):
+    """Leituras em sequencia, agrupadas: [0, 0, None] -> '0 x2, mudo x1'."""
+    grupos = []
+    for valor in lidas:
+        texto = "mudo" if valor is None else str(valor)
+        if grupos and grupos[-1][0] == texto:
+            grupos[-1][1] += 1
+        else:
+            grupos.append([texto, 1])
+    return ", ".join("{} x{}".format(t, n) for t, n in grupos) or "nenhuma"
+
+
 def aceleracao_da_rampa(vel_pps, rampa_ms):
     """Aceleracao em pulsos/s^2 que leva de 0 a `vel_pps` em `rampa_ms`.
 
@@ -298,13 +310,16 @@ class Drive:
             antes = None
         self.escrever(REG_SALVAR, 1)
         viu_ocupado = False          # 0 ou silencio depois do pedido
+        lidas = []                   # o que cada consulta devolveu (None = mudo)
         for _ in range(max(1, int(espera / INTERVALO_SALVAR))):
             time.sleep(INTERVALO_SALVAR)
             try:
                 valor = self.ler(REG_SALVAR)[0]
             except DriveNaoConfirmou:
                 viu_ocupado = True
+                lidas.append(None)
                 continue
+            lidas.append(valor)
             if valor == 1:
                 if antes == 1 and not viu_ocupado:
                     self._anotar(
@@ -314,6 +329,14 @@ class Drive:
                         "drive.".format(self.slave_id))
                 return True
             viu_ocupado = True
+        # O que o 90 devolveu decide a proxima pergunta: sempre 0 (o drive
+        # nao sinaliza como o manual diz, ou nao grava), mudo (ocupado
+        # gravando, ou fora do ar) ou outro valor (outra convencao).
+        self._anotar("[SALVAR] Drive {}: o reg 90 nao chegou a 1. Antes do "
+                     "pedido: {}. Nas {} consultas: {}. So o religamento diz "
+                     "se gravou.".format(
+                         self.slave_id, "mudo" if antes is None else antes,
+                         len(lidas), _resumir_leituras(lidas)))
         return False
 
     def _anotar(self, texto):

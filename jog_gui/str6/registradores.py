@@ -133,11 +133,30 @@ ST_SOBRECORRENTE = 0x0001    # bit 0
 ST_SOBRETENSAO = 0x0002      # bit 1
 ST_LIMITE_POS = 0x0010       # bit 4: sinal de limite positivo presente
 ST_LIMITE_NEG = 0x0020       # bit 5: sinal de limite negativo presente
-# bit 7: 0 = envio de pulsos interno concluido, 1 = nao concluido. A mesma
-# tabela da 1 como "valor padrao" deste bit -- PONTO EM ABERTO, e por isso o
-# fim de um movimento nunca e decidido so por ele (ver EixoMovimento).
-ST_EM_MOVIMENTO = 0x0080
+# bit 7: a tabela do manual se contradiz. O NOME do bit e "MOVIMENTO
+# CONCLUIDO" e o valor padrao e 1 (drive recem-ligado, parado), mas a coluna
+# de explicacao diz "1 = pulso interno nao concluido". Na bancada (16/10) o 75
+# leu 0x0080 com o motor parado, o que casa com o NOME. Nunca leia o bit
+# direto: use em_movimento(), que segue BIT7_UM_E_CONCLUIDO. O fim de um
+# movimento continua sem depender so dele (ver EixoMovimento).
+ST_BIT7 = 0x0080
 ST_FALHA = ST_SOBRECORRENTE | ST_SOBRETENSAO
+
+# Polaridade do bit 7. True = 1 significa "movimento concluido" (o nome do bit
+# e o lido em bancada). False = 1 significa "em movimento" (a explicacao do
+# manual). PONTO EM ABERTO: confirmar lendo o 75 com o eixo em JOG continuo --
+# girando, o bit 7 tem de estar no oposto de parado.
+BIT7_UM_E_CONCLUIDO = True
+
+
+def em_movimento(status):
+    """True se o bit 7 do status (75) diz que o drive ainda envia pulsos."""
+    return bool(status & ST_BIT7) != BIT7_UM_E_CONCLUIDO
+
+
+def bit7_para(movendo):
+    """O bit 7 que um drive poe no 75 com o eixo `movendo` (para simulacoes)."""
+    return ST_BIT7 if movendo != BIT7_UM_E_CONCLUIDO else 0
 
 # --- Valores de malha (24) -----------------------------------------------------
 
@@ -167,6 +186,10 @@ FLANGES = {200: "28", 400: "42", 500: "57", 600: "60", 800: "86"}
 
 CORRENTE_MIN_MA = 50
 CORRENTE_MAX_MA = 7800
+# O registrador 0 aceita 50 mA, mas a saida de pico do drive vai de 0,5 A a
+# 7,8 A (manual p. 4; a p. 3 fala em 0,3~7,8 A). Abaixo disso o pico lido no
+# 0 nao e o que chega ao motor -- a tela avisa.
+CORRENTE_MIN_SAIDA_MA = 500
 PULSOS_VOLTA_MIN = 200
 PULSOS_VOLTA_MAX = 51200
 PULSOS_VOLTA_FABRICA = 6000
@@ -193,7 +216,7 @@ def nome_alarme(codigo):
 def nomes_status(status):
     """Os bits ligados do status (75), por extenso, na ordem da tabela."""
     nomes = []
-    if status & ST_EM_MOVIMENTO:
+    if em_movimento(status):
         nomes.append("em movimento")
     if status & ST_LIMITE_NEG:
         nomes.append("limite -")

@@ -54,7 +54,6 @@ from jog_gui.str6 import (
     REG_PULSOS_L,
     REG_STATUS,
     REG_VEL_HOME,
-    ST_EM_MOVIMENTO,
     ST_FALHA,
     ST_LIMITE_NEG,
     ST_LIMITE_POS,
@@ -62,6 +61,7 @@ from jog_gui.str6 import (
     ST_SOBRETENSAO,
     VEL_MAX_PPS,
     de_palavras_32,
+    em_movimento,
     nome_alarme,
     perfil_movimento,
 )
@@ -705,7 +705,7 @@ class EixoMovimento:
             self.on_progress({"etapa": "posicionando", "pos": pos,
                               "status": st, "destino": destino})
 
-            movendo = bool(st & ST_EM_MOVIMENTO)
+            movendo = em_movimento(st)
             if not partiu and (movendo or abs(pos - p0) > self.PASSO_ESTAVEL):
                 partiu = True
 
@@ -1146,8 +1146,8 @@ class EixoMovimento:
             # HOME_PARADO -- nao basta uma leitura parada: o drive para no
             # limite e reverte, e essa pausa nao e o fim. Com o bit 7 ainda
             # dizendo "em movimento" a espera dobra, que e o que cobre o caso
-            # de o bit ficar em 1 com o eixo parado (valor padrao 1 no manual).
-            movendo = bool(st & ST_EM_MOVIMENTO)
+            # de a polaridade do bit (BIT7_UM_E_CONCLUIDO) estar errada.
+            movendo = em_movimento(st)
             if anterior is not None and abs(pos - anterior) > self.PASSO_ESTAVEL:
                 andou = True
                 parado_desde = None

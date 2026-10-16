@@ -27,10 +27,10 @@ from jog_gui.str6 import (
     REG_STATUS,
     SLAVE_MAX,
     SLAVE_MIN,
-    ST_EM_MOVIMENTO,
     ST_FALHA,
     VARREDURA_MAX,
     de_palavras_32,
+    em_movimento,
 )
 
 from .eixo import VERSAO_CADASTRO, Eixo
@@ -731,7 +731,7 @@ class DrivesMixin:
             return "ALARME {}".format(resumo["alarme"]), RED
         if resumo["status"] & ST_FALHA:
             return "FALHA", RED
-        if resumo["status"] & ST_EM_MOVIMENTO:
+        if em_movimento(resumo["status"]):
             return "movendo", YELLOW
         if resumo["enable"]:
             return "habilitado", GREEN

@@ -57,11 +57,11 @@ from jog_gui.str6 import (
     REG_STATUS,
     REG_VEL_HOME,
     REG_VEL_L,
-    ST_EM_MOVIMENTO,
     ST_LIMITE_NEG,
     ST_LIMITE_POS,
     ST_SOBRECORRENTE,
     VEL_MAX_PPS,
+    bit7_para,
     palavras_32,
 )
 
@@ -75,9 +75,10 @@ class DriveFalso:
         sem parar, 0 e 5 param. Depois de aceito o registrador volta a 6;
       - `frente_soma`: se o comando "frente" soma ou subtrai pulsos -- e o que
         o "Detectar sentido +" descobre na bancada;
-      - status (75): bit 7 enquanto houver pulso a enviar, bits 4/5 com o came
-        na fenda do sensor, bit 0 em sobrecorrente. `bit7_preso` encena o
-        ponto em aberto do manual (bit 7 com "valor padrao 1");
+      - status (75): bit 7 conforme BIT7_UM_E_CONCLUIDO (bit7_para), bits 4/5
+        com o came na fenda do sensor, bit 0 em sobrecorrente. `bit7_preso`
+        encena a polaridade errada: o bit 7 diz "em movimento" com o eixo
+        parado (o manual se contradiz sobre o bit);
       - retorno a zero (71): anda ate a borda do came e para;
       - silencio: `mudo_por` faz N leituras seguidas falharem.
 
@@ -185,10 +186,9 @@ class DriveFalso:
         return self.came is not None and self.came[0] <= self.posicao <= self.came[1]
 
     def _status(self):
-        st = self.status_extra
-        if self._restante or self.continuo or self._home_alvo is not None \
-                or self.bit7_preso:
-            st |= ST_EM_MOVIMENTO
+        movendo = bool(self._restante or self.continuo
+                       or self._home_alvo is not None or self.bit7_preso)
+        st = self.status_extra | bit7_para(movendo)
         if self._no_came():
             st |= self.bit_sensor
         return st
@@ -383,8 +383,8 @@ class TestMoverPulsos(unittest.TestCase):
         self.assertEqual(res.posicao, 1000)
 
     def test_bit7_preso_em_1_nao_impede_o_fim_no_destino(self):
-        # Ponto em aberto do manual: o bit 7 tem "valor padrao 1". Se ele
-        # ficar ligado com o eixo parado, a chegada ao destino encerra.
+        # Ponto em aberto do manual: a polaridade do bit 7. Se ele disser "em
+        # movimento" com o eixo parado, a chegada ao destino encerra.
         drive = DriveFalso(avancar_por_leitura=100)
         drive.bit7_preso = True
         eixo, _ = _eixo(drive)
