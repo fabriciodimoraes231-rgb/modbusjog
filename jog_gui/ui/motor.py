@@ -23,6 +23,7 @@ from .tema import (
     TEXT,
     TEXT_DIM,
     YELLOW,
+    fonte,
 )
 
 
@@ -70,7 +71,7 @@ class MotorMixin:
                                "(num eixo vertical isso DERRUBA A CARGA)",
                        variable=self.soltar_emerg, bg=BG2, fg=TEXT,
                        selectcolor=BG3, activebackground=BG2, justify="left",
-                       font=("Segoe UI", 8)).pack(anchor="w", pady=(6, 0))
+                       font=fonte(8)).pack(anchor="w", pady=(6, 0))
 
     # --- MOTOR ON/OFF  (reg 6) --------------------------------------------------
 

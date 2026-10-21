@@ -186,9 +186,11 @@ FLANGES = {200: "28", 400: "42", 500: "57", 600: "60", 800: "86"}
 
 CORRENTE_MIN_MA = 50
 CORRENTE_MAX_MA = 7800
-# O registrador 0 aceita 50 mA, mas a saida de pico do drive vai de 0,5 A a
-# 7,8 A (manual p. 4; a p. 3 fala em 0,3~7,8 A). Abaixo disso o pico lido no
-# 0 nao e o que chega ao motor -- a tela avisa.
+# O registrador 0 aceita 50 mA, mas a faixa de saida do manual vai de 0,5 A
+# a 7,8 A (p. 4; a p. 3 fala em 0,3~7,8 A). Na bancada (16/10) o drive
+# regulou abaixo disso: com 2 % (129 mA no 0) a corrente medida caiu e o
+# motor parou de esquentar. A tela avisa so porque, fora da faixa do manual,
+# o torque nao e garantido -- em malha aberta, passo perdido nao aparece.
 CORRENTE_MIN_SAIDA_MA = 500
 PULSOS_VOLTA_MIN = 200
 PULSOS_VOLTA_MAX = 51200

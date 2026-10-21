@@ -27,7 +27,7 @@ from .tema import (
     YELLOW,
 )
 
-from .eixo import HOME_ENTRADA_NEG, HOME_MODO_NATIVO
+from .eixo import HOME_ENTRADA_NEG, HOME_MODO_SOFTWARE
 from .sensores import PADRAO as SENSOR_PADRAO
 from .conexao import ConexaoMixin
 from .drives import DrivesMixin
@@ -97,6 +97,7 @@ class JogApp(DrivesMixin, ConexaoMixin, MotorMixin, CorrenteMixin, JogMixin,
         self._poll_tick   = 0
         self._poll_em_voo = False      # um ciclo do monitor ainda rodando?
         self._secundario_mudo_ate = {}  # eixo -> hora em que volta ao rodizio
+        self._falhas_seguidas = {}      # eixo -> leituras seguidas sem resposta
         self._jog_lock    = threading.Lock()
         # Endereco do drive congelado por operacao (ver _thread_op)
         self._slave_local = threading.local()
@@ -124,7 +125,7 @@ class JogApp(DrivesMixin, ConexaoMixin, MotorMixin, CorrenteMixin, JogMixin,
 
         # Homing (retorno ao zero) com o sensor numa entrada de limite
         self.sensor_tipo  = tk.StringVar(value=SENSOR_PADRAO)
-        self.home_modo    = tk.StringVar(value=HOME_MODO_NATIVO)
+        self.home_modo    = tk.StringVar(value=HOME_MODO_SOFTWARE)
         self.home_entrada = tk.StringVar(value=HOME_ENTRADA_NEG)
         self.home_inv     = tk.IntVar(value=0)     # nivel invertido (reg 73)
         # Filtro baixo de proposito: o garfo responde rapido e a janela de

@@ -26,6 +26,7 @@ from .tema import (
     TEXT,
     TEXT_DIM,
     YELLOW,
+    fonte,
 )
 
 
@@ -93,7 +94,7 @@ class CursoMixin:
         tk.Label(f, text="Zero = ponto do sensor (definido pelo homing).\n"
                          "Limite + : quanto o eixo pode subir acima do zero.\n"
                          "Limite - : quanto pode descer abaixo do zero.",
-                 bg=BG2, fg=TEXT_DIM, font=("Segoe UI", 8),
+                 bg=BG2, fg=TEXT_DIM, font=fonte(8),
                  justify="left").pack(fill="x", pady=(0, 4))
 
         # --- faixa permitida ---------------------------------------------------
@@ -125,7 +126,7 @@ class CursoMixin:
         sep_passo.pack(fill="x", pady=(6, 4))
         tk.Label(f, text="Jog por pulsos - passo exato, contado pelo drive "
                          "(use para acertar o limite)",
-                 bg=BG2, fg=TEXT_DIM, font=("Segoe UI", 8),
+                 bg=BG2, fg=TEXT_DIM, font=fonte(8),
                  justify="left").pack(fill="x")
 
         row = _linha("Passo:")
@@ -305,10 +306,10 @@ class CursoMixin:
                 xp = _x(p)
                 cv.create_line(xp, y - 9, xp, y + 9, fill=cor, width=2)
                 cv.create_text(xp, y + 16, text="{} {}".format(txt, p), fill=cor,
-                               font=("Segoe UI", 7))
+                               font=fonte(7))
         else:
             cv.create_text((x0 + x1) / 2.0, y + 16, text="faixa nao definida",
-                           fill=TEXT_DIM, font=("Segoe UI", 7))
+                           fill=TEXT_DIM, font=fonte(7))
 
         if pos is not None:
             fora = span > 0 and (pos < neg or pos > pmax)
@@ -317,7 +318,7 @@ class CursoMixin:
             cv.create_polygon(xp, y - 3, xp - 6, y - 13, xp + 6, y - 13,
                               fill=cor, outline="")
             cv.create_text(xp, y - 14, text=str(pos), fill=cor,
-                           font=("Segoe UI", 7), anchor="s")
+                           font=fonte(7), anchor="s")
 
     def _curso_ui(self, pos: int):
         """Chamado pelo monitor e pelos movimentos: atualiza regua e rotulo."""

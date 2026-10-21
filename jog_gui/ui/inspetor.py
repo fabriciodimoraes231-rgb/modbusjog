@@ -17,6 +17,7 @@ from .tema import (
     TEXT,
     TEXT_DIM,
     YELLOW,
+    fonte,
 )
 
 
@@ -53,7 +54,7 @@ class InspetorMixin:
                  insertbackground=TEXT, relief="flat",
                  font=FONT_LABEL).pack(side="left")
         tk.Label(row, text="ex.: 24 ou 0x18", bg=BG2, fg=TEXT_DIM,
-                 font=("Segoe UI", 8)).pack(side="left", padx=4)
+                 font=fonte(8)).pack(side="left", padx=4)
 
         row = tk.Frame(f, bg=BG2)
         row.pack(fill="x", pady=2)
@@ -68,10 +69,10 @@ class InspetorMixin:
 
         # Valor atual em destaque: e o que responde "mudou ou nao" de relance
         self.lbl_reg_valor = tk.Label(f, text="---", bg=BG3, fg=TEXT_DIM,
-                                      font=("Segoe UI", 13, "bold"), pady=6)
+                                      font=fonte(13, "bold"), pady=6)
         self.lbl_reg_valor.pack(fill="x", pady=(4, 2))
         self.lbl_reg_nome = tk.Label(f, text="", bg=BG2, fg=TEXT_DIM,
-                                     font=("Segoe UI", 8))
+                                     font=fonte(8))
         self.lbl_reg_nome.pack()
         self.lbl_reg_mudanca = tk.Label(f, text="Sem mudanca registrada",
                                         bg=BG2, fg=TEXT_DIM, font=FONT_LABEL,
@@ -220,7 +221,20 @@ class InspetorMixin:
         intervalo = self._reg_intervalo_s()
         falhas = 0
         ultimo = None
+        em_espera = False
         while self.reg_vigiando and self._conectado:
+            # Com um movimento em curso, so a rotina dele fala com o drive
+            # (StatusMixin._movimento_em_curso): a vigilancia espera.
+            if self._movimento_em_curso():
+                if not em_espera:
+                    self._log("[REG] vigilancia do reg {} em espera: um "
+                              "movimento esta usando o barramento".format(reg))
+                    em_espera = True
+                time.sleep(intervalo)
+                continue
+            if em_espera:
+                self._log("[REG] vigilancia do reg {} retomada".format(reg))
+                em_espera = False
             vals = self._ler_regs(reg, 1)
             if vals is None:
                 falhas += 1

@@ -195,6 +195,9 @@ class EixoMovimento:
     # conclusao, e o bit 7 de 75 tem descricao ambigua.
     HOME_PARADO = 1.5        # s
     HOME_PARTIDA = 3.0       # s
+    # De quanto em quanto tempo a espera pelo sensor anota a posicao no log.
+    # Sem isso, uma etapa que nao termina nao diz se o eixo andou.
+    HOME_RELATO = 2.0        # s
     WD_FALHAS_MAX = 2        # leituras seguidas sem resposta antes de parar
 
     def __init__(self, drive, config, log=None, on_progress=None):
@@ -947,6 +950,10 @@ class EixoMovimento:
         """
         limite = self._agora() + timeout
         falhas = 0
+        relato = self._agora() + self.HOME_RELATO
+        pos_relato = self.ler_posicao()
+        self.log("[HOME] {}: partindo da posicao {}".format(
+            etapa, "?" if pos_relato is None else pos_relato))
         while not self._cancelado:
             leitura = self._sensor_e_falha()
             if leitura is None:
@@ -955,7 +962,10 @@ class EixoMovimento:
                     self.parada_segura(
                         "Comunicacao perdida durante {}".format(etapa))
                     return Resultado(False, CAUSA_DRIVE_MUDO,
-                                     "comunicacao perdida em {}".format(etapa))
+                                     "comunicacao perdida em {} (ultima "
+                                     "posicao lida: {})".format(
+                                         etapa, "?" if pos_relato is None
+                                         else pos_relato))
             else:
                 falhas = 0
                 sensor, st, alm = leitura
@@ -968,6 +978,21 @@ class EixoMovimento:
                 if sensor == alvo:
                     self.jog_parar()
                     return None
+                if self._agora() >= relato:
+                    # Uma leitura a mais a cada HOME_RELATO: e o que diz, no
+                    # log, se uma etapa que nao termina tem o eixo andando ou
+                    # parado (limite ativo segurando, sentido errado).
+                    relato = self._agora() + self.HOME_RELATO
+                    pos = self.ler_posicao()
+                    parado = (pos is not None and pos_relato is not None
+                              and abs(pos - pos_relato) <= self.PASSO_ESTAVEL)
+                    self.log("[HOME] {}: posicao {}, sensor {}{}".format(
+                        etapa, "?" if pos is None else pos,
+                        "acionado" if sensor else "livre",
+                        " - EIXO NAO ANDOU nos ultimos {:.0f} s".format(
+                            self.HOME_RELATO) if parado else ""))
+                    if pos is not None:
+                        pos_relato = pos
             if self._agora() > limite:
                 self.jog_parar()
                 return Resultado(

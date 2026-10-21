@@ -46,6 +46,7 @@ from .tema import (
     TEXT_DIM,
     YELLOW,
     amperes_txt,
+    fonte,
 )
 
 # Nome curto de cada registrador gravado por este card, para o log.
@@ -102,7 +103,7 @@ class CorrenteMixin:
 
         self.lbl_malha_badge = tk.Label(f, text="MALHA: ?  -  clique em Ler do Drive",
                                         bg=BG3, fg=TEXT_DIM,
-                                        font=("Segoe UI", 11, "bold"), pady=6)
+                                        font=fonte(11, "bold"), pady=6)
         self.lbl_malha_badge.pack(fill="x", pady=(4, 2))
         self.lbl_malha_aviso = tk.Label(f, text="", bg=BG2, fg=YELLOW,
                                         font=FONT_LABEL, wraplength=300)
@@ -134,7 +135,7 @@ class CorrenteMixin:
         tk.Label(f, text="Standby: o drive reduz a corrente com o eixo parado.\n"
                          "Pulsos por volta mudam o sentido de TODO numero em\n"
                          "pulsos (limites, zero, velocidades) - grave com cuidado.",
-                 bg=BG2, fg=TEXT_DIM, font=("Segoe UI", 8),
+                 bg=BG2, fg=TEXT_DIM, font=fonte(8),
                  justify="center").pack(pady=(4, 0))
 
         # --- malha de corrente (13, 15, 16) ------------------------------------
@@ -145,7 +146,7 @@ class CorrenteMixin:
                        selectcolor=BG3, activebackground=BG2,
                        font=FONT_LABEL).pack(anchor="w")
         tk.Label(f, text="Com o autoajuste ligado, Kp e Ki sao somente leitura",
-                 bg=BG2, fg=TEXT_DIM, font=("Segoe UI", 8)).pack()
+                 bg=BG2, fg=TEXT_DIM, font=fonte(8)).pack()
 
         row = _linha("Kp:")
         _spin(row, self.ganho_p, 10, 32767, "(reg 15)")
@@ -576,9 +577,10 @@ class CorrenteMixin:
                         "memoria: Testar gravacao"), GREEN
         else:
             msg, cor = "Gravado, mas o salvamento (reg 90) nao confirmou", YELLOW
-        if aviso and not erros:
-            msg, cor = msg + "\n" + aviso, YELLOW
         self._log("[CFG-W] {}".format(msg))
+        if aviso and not erros:
+            # So na tela: o log ja teve a linha ATENCAO
+            msg, cor = msg + "\n" + aviso, YELLOW
         self.after(0, lambda: self.lbl_corr_status.config(text=msg, fg=cor))
 
     def _mostrar_configuracao(self, alvo, conferido):
@@ -750,16 +752,16 @@ class CorrenteMixin:
 
 
 def _aviso_pico(pico_ma):
-    """Aviso quando o pico lido no 0 fica abaixo da saida minima do drive.
+    """Aviso quando o pico lido no 0 fica abaixo da faixa de saida do manual.
 
-    O registrador aceita o valor, mas o manual (p. 4) da 0,5 A como menor
-    corrente de saida: abaixo disso o motor recebe o piso do drive, nao o
-    numero do 0. Devolve "" quando esta dentro da faixa.
+    O drive regula abaixo de 0,5 A (bancada, 16/10), mas o manual (p. 4) nao
+    cobre essa faixa: o risco e falta de torque, que em malha aberta vira
+    passo perdido sem alarme. Devolve "" quando esta dentro da faixa.
     """
     if pico_ma >= CORRENTE_MIN_SAIDA_MA:
         return ""
-    return ("pico de {} abaixo do minimo de saida do drive ({}, manual p. 4): "
-            "o motor recebe o piso do drive, nao este valor".format(
+    return ("pico de {} abaixo da faixa de saida do manual (a partir de {}, "
+            "p. 4): confira se o eixo nao perde passo".format(
                 amperes_txt(pico_ma), amperes_txt(CORRENTE_MIN_SAIDA_MA)))
 
 

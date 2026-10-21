@@ -42,6 +42,14 @@ class StatusMixin:
     # Segundos que um eixo secundario que nao respondeu fica fora do rodizio.
     _PAUSA_MUDO_S = 10.0
 
+    # Leituras seguidas sem resposta antes de a barra dizer "sem resposta". Um
+    # quadro perdido por ruido nao e drive desligado: com 1, a linha piscava
+    # "sem resposta" e voltava, e o eixo secundario sumia do rodizio por 10 s.
+    _FALHAS_PARA_MUDO = 2
+
+    # De quantos em quantos segundos o log recebe o resumo do barramento.
+    _RESUMO_COM_S = 30.0
+
     def _card_status(self, parent):
         """Monta o card: os rotulos de leitura e o botao do monitor."""
         f = self._card(parent, "STATUS DO DRIVE")
@@ -104,7 +112,8 @@ class StatusMixin:
         """
         if not self._conectado:
             return
-        if not self._poll_em_voo:
+        self._resumo_com()
+        if not self._poll_em_voo and not self._movimento_em_curso():
             self._poll_tick += 1
             self._poll_em_voo = True
             self._thread_op(self._do_poll_ciclo,
@@ -117,6 +126,65 @@ class StatusMixin:
             self._do_poll(lento)
         finally:
             self._poll_em_voo = False
+
+    def _movimento_em_curso(self):
+        """True enquanto JOG, homing, posicionamento ou teste do sensor rodam.
+
+        Nesses momentos a rotina do movimento ja le status, alarme e posicao
+        em laco, e e ela que precisa da resposta a tempo: o watchdog para o
+        eixo com duas leituras perdidas. Ela passa a ser a UNICA a falar com o
+        drive -- o monitor e a vigilancia do inspetor esperam, e a tela segue
+        pelo progresso do proprio movimento (`_progresso_mov`).
+        """
+        return any(getattr(self, nome, False) for nome in
+                   ("jog_active", "home_ativo", "teste_ativo", "curso_mov"))
+
+    def _conta_falha(self, ident):
+        """Soma uma leitura sem resposta do eixo `ident`.
+
+        Devolve True quando ja sao _FALHAS_PARA_MUDO seguidas; so entao o
+        eixo e mostrado como "sem resposta". Uma leitura boa zera a conta
+        (`self._falhas_seguidas.pop`).
+        """
+        n = self._falhas_seguidas.get(ident, 0) + 1
+        self._falhas_seguidas[ident] = n
+        return n >= self._FALHAS_PARA_MUDO
+
+    def _resumo_com(self, agora_mesmo=False):
+        """A cada _RESUMO_COM_S, leva ao log as falhas do barramento, se houve.
+
+        `agora_mesmo` ignora o intervalo: e o que se quer logo depois de uma
+        rotina parar por "comunicacao perdida", para o log dizer de que tipo
+        foram as falhas.
+
+        Separa os desfechos (Barramento.estatisticas): "sem resposta" aponta
+        endereco, alimentacao ou pedido atropelado; CRC aponta ruido no cabo;
+        "de outro endereco" aponta colisao ou dois drives no mesmo endereco.
+        Na thread da interface.
+        """
+        agora = time.time()
+        desde = agora - getattr(self, "_resumo_com_em", agora)
+        if not agora_mesmo and desde < self._RESUMO_COM_S:
+            if not hasattr(self, "_resumo_com_em"):
+                self._resumo_com_em = agora
+            return
+        self._resumo_com_em = agora
+        bus = getattr(self, "bus", None)
+        if bus is None or not hasattr(bus, "estatisticas"):
+            return
+        partes = []
+        for slave, c in sorted(bus.estatisticas().items()):
+            falhas = [(n, nome) for nome, n in (
+                ("sem resposta", c["mudo"]), ("CRC", c["crc"]),
+                ("de outro endereco", c["outro_slave"]),
+                ("erro de porta", c["erro"])) if n]
+            if falhas:
+                partes.append("drive {}: {} ok, {}".format(
+                    slave, c["ok"],
+                    ", ".join("{} {}".format(n, nome) for n, nome in falhas)))
+        if partes:
+            self._log("[COM] ultimos {:.0f} s: {}".format(
+                desde, " | ".join(partes)))
 
     def _pausar_monitor(self):
         """Para o monitor, se estiver rodando. Devolve True se parou.
@@ -144,8 +212,10 @@ class StatusMixin:
         lido_em = time.time()      # antes da leitura: ver o enable abaixo
         st = self._ler_regs(REG_STATUS, 1)
         if st is None:
-            self.after(0, lambda: self._atualizar_linha(ativo, None))
+            if self._conta_falha(ativo):
+                self.after(0, lambda: self._atualizar_linha(ativo, None))
             return
+        self._falhas_seguidas.pop(ativo, None)
         alm = self._ler_regs(REG_ALARME, 1)
         contagem = self._ler_regs(REG_PULSOS_L, 4)
         enable = self._ler_regs(REG_ENABLE, 1)
@@ -212,10 +282,13 @@ class StatusMixin:
             return
         resumo = self._ler_resumo_eixo(ident)
         if resumo is None:
+            if not self._conta_falha(ident):
+                return       # falha isolada: a linha fica com a ultima leitura
             # Cada consulta a um eixo mudo custa 1 s de barramento: ele sai do
             # rodizio por um tempo. A linha dele continua "sem resposta".
             self._secundario_mudo_ate[ident] = time.time() + self._PAUSA_MUDO_S
         else:
+            self._falhas_seguidas.pop(ident, None)
             self._secundario_mudo_ate.pop(ident, None)
         self.after(0, lambda: self._atualizar_linha(ident, resumo))
 
@@ -242,12 +315,17 @@ class StatusMixin:
         self.lbl_zero.config(text="estabelecido" if zero else "NAO estabelecido",
                              fg=GREEN if zero else YELLOW)
 
-        # Estado do sensor de origem: o bit de limite da entrada escolhida
+        # Estado do sensor de origem. As DUAS entradas aparecem: com o fio no
+        # terminal errado, e a outra que muda ao passar a lamina -- a selecionada
+        # vai entre colchetes e decide a cor.
         positivo = self.home_entrada.get() == HOME_ENTRADA_POS
         acionado = bool(st & (ST_LIMITE_POS if positivo else ST_LIMITE_NEG))
         if self._eixo_tem_origem():
+            def _estado(nome, bit, selecionada):
+                txt = "{}: {}".format(nome, "ACIONADO" if st & bit else "livre")
+                return "[{}]".format(txt) if selecionada else txt
             self.lbl_sensor.config(
-                text="Sensor {}: {}   (75 = 0x{:04X})".format(
-                    "IN2 (lim +)" if positivo else "IN1 (lim -)",
-                    "ACIONADO" if acionado else "livre", st),
+                text="{}   {}   (75 = 0x{:04X})".format(
+                    _estado("IN1", ST_LIMITE_NEG, not positivo),
+                    _estado("IN2", ST_LIMITE_POS, positivo), st),
                 fg=GREEN if acionado else TEXT_DIM)

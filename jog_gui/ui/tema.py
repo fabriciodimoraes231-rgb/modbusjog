@@ -1,5 +1,6 @@
 """Cores, fontes e estilos ttk da interface."""
 
+import sys
 from tkinter import ttk
 
 
@@ -17,12 +18,26 @@ BORDER      = "#2d3748"
 JOG_CLR     = "#f59e0b"
 JOG_ACTIVE  = "#dc2626"
 
-FONT_TITLE  = ("Segoe UI", 16, "bold")
-FONT_LABEL  = ("Segoe UI", 9)
-FONT_BOLD   = ("Segoe UI", 9, "bold")
-FONT_MONO   = ("Consolas", 8)
-FONT_BIG    = ("Segoe UI", 20, "bold")
-FONT_JOG    = ("Segoe UI", 13, "bold")
+# Segoe UI e Consolas so existem no Windows. No Linux o Tk trocaria por uma
+# fonte qualquer, de largura diferente, e os cards desalinhariam: la vale a
+# DejaVu, que vem em toda distribuicao.
+if sys.platform.startswith("win"):
+    FAMILIA, FAMILIA_MONO = "Segoe UI", "Consolas"
+else:
+    FAMILIA, FAMILIA_MONO = "DejaVu Sans", "DejaVu Sans Mono"
+
+
+def fonte(tamanho, *estilo):
+    """Fonte da interface no tamanho pedido: fonte(8), fonte(11, "bold")."""
+    return (FAMILIA, tamanho) + estilo
+
+
+FONT_TITLE  = fonte(16, "bold")
+FONT_LABEL  = fonte(9)
+FONT_BOLD   = fonte(9, "bold")
+FONT_MONO   = (FAMILIA_MONO, 8)
+FONT_BIG    = fonte(20, "bold")
+FONT_JOG    = fonte(13, "bold")
 
 
 def amperes_txt(ma: int) -> str:
