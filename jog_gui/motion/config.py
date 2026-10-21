@@ -97,7 +97,9 @@ class ConfigEixo:
         self.rampa_ms = kwargs.get("rampa_ms", RAMPA_MS)
 
         self.sensor_tem_origem = kwargs.get("sensor_tem_origem", True)
-        self.home_modo = kwargs.get("home_modo", "nativo")
+        # Software por padrao (decisao de 16/10/2026): o nativo (reg 71) pode
+        # travar o motor depois que o sensor, ligado como limite, aciona.
+        self.home_modo = kwargs.get("home_modo", "software")
         self.home_entrada = kwargs.get("home_entrada", ENTRADA_LIM_NEG)
         self.home_v_apr = kwargs.get("home_v_apr", 6000)
         self.home_v_ras = kwargs.get("home_v_ras", 1000)
@@ -146,9 +148,9 @@ class ConfigEixo:
             jog_sentido=_sentido(valores, "jog_sentido", FRENTE),
             rampa_ms=_inteiro(valores, "rampa_ms", RAMPA_MS),
             sensor_tem_origem=tem_origem,
-            home_modo=("software"
+            home_modo=("nativo"
                        if str(valores.get("home_modo", "")).strip().lower()
-                       .startswith("software") else "nativo"),
+                       .startswith("nativo") else "software"),
             home_entrada=entrada_home(valores.get("home_entrada")),
             home_v_apr=_inteiro(valores, "home_v_apr", 6000),
             home_v_ras=_inteiro(valores, "home_v_ras", 1000),

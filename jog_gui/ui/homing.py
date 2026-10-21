@@ -5,7 +5,7 @@ from tkinter import ttk
 import time
 import tkinter as tk
 
-from jog_gui.motion import CAUSA_CANCELADO, MovimentoRecusado
+from jog_gui.motion import CAUSA_CANCELADO, CAUSA_DRIVE_MUDO, MovimentoRecusado
 from jog_gui.str6 import (
     CTRL_NIVEL_LIM_NEG,
     CTRL_NIVEL_LIM_POS,
@@ -20,6 +20,7 @@ from jog_gui.str6 import (
 )
 
 from .eixo import (
+    HOME_ENTRADA_NEG,
     HOME_ENTRADA_POS,
     HOME_ENTRADAS,
     HOME_MODO_SOFTWARE,
@@ -37,6 +38,7 @@ from .tema import (
     TEXT,
     TEXT_DIM,
     YELLOW,
+    fonte,
 )
 
 from . import sensores
@@ -131,7 +133,7 @@ class HomingMixin:
 
         # Fiacao do modelo escolhido -- o texto vem do catalogo (ui/sensores.py)
         self.lbl_sensor_fiacao = tk.Label(
-            f, text="", bg=BG2, fg=TEXT_DIM, font=("Segoe UI", 8),
+            f, text="", bg=BG2, fg=TEXT_DIM, font=fonte(8),
             justify="center")
         self.lbl_sensor_fiacao.pack(pady=(0, 4))
 
@@ -162,9 +164,10 @@ class HomingMixin:
         _spin(row, self.home_v_apr, 100, VEL_MAX_PPS, "p/s   (reg 64/65)", 100)
         row = _linha("Rastejo / retorno:")
         _spin(row, self.home_v_ras, 10, VEL_MAX_PPS, "p/s   (reg 60)", 50)
-        tk.Label(f, text="Nativo: o drive vai ate o sensor na aproximacao e volta\n"
-                         "ate o sinal no rastejo (manual p. 18). Zero: reg 40 = 1.",
-                 bg=BG2, fg=TEXT_DIM, font=("Segoe UI", 8),
+        tk.Label(f, text="Software (padrao): busca o sensor e para na borda.\n"
+                         "Nativo: o drive vai ate o sensor e volta no rastejo\n"
+                         "(manual p. 18); pode travar o motor. Zero: reg 40 = 1.",
+                 bg=BG2, fg=TEXT_DIM, font=fonte(8),
                  justify="center").pack(pady=(2, 0))
 
         # --- acionamento --------------------------------------------------------
@@ -435,16 +438,21 @@ class HomingMixin:
         self._thread_op(self._do_teste_sensor, self._entrada_indice())
 
     def _do_teste_sensor(self, idx):
-        """Le o 75 a cada 100 ms por ate 30 s e diagnostica a fiacao.
+        """Le o 75 a cada 100 ms e DETECTA a entrada e o nivel do sensor.
 
-        Conta as bordas das DUAS entradas de limite, nao so da selecionada: se
-        o fio estiver no terminal errado, o log diz em qual ele comutou -- que
-        e a pergunta que o operador tem nesse momento.
+        O operador comeca com a lamina FORA do sensor, coloca e tira. O teste
+        termina sozinho quando uma entrada comuta duas vezes (entrou e saiu),
+        ou em 30 s.
 
-        Tres desfechos: a entrada escolhida comutou (OK, resta confirmar que o
-        "acionado" e o came DENTRO da fenda); a outra comutou (terminal
-        errado); nenhuma comutou (24 V, fio ou IN+). Roda em thread e nao
-        energiza o motor.
+        Conta as bordas das DUAS entradas de limite, nao so da selecionada:
+          - a entrada que comutou e a do sensor -- a tela passa a usa-la;
+          - o estado dela na primeira leitura e o repouso (lamina fora), que
+            tem de ser lido como "livre". Se foi lido como acionado, o nivel
+            do reg 73 esta invertido para este sensor, e o teste propoe o
+            nivel certo (ver `_aplicar_deteccao`);
+          - as duas comutaram, ou nenhuma: nada e alterado, e a mensagem diz
+            o que conferir.
+        Roda em thread e nao energiza o motor.
         """
         t0         = time.time()
         ultimo_t   = t0
@@ -455,10 +463,19 @@ class HomingMixin:
         falhas     = 0
         bit_sel    = _ENTRADAS[idx][1]
 
-        self._log("[TESTE] Lendo o reg 75 por {:.0f} s - passe a bandeira pela "
-                  "ranhura do sensor".format(self._TESTE_DURACAO))
+        # O nivel atual do 73 e o que permite traduzir "acionado no repouso"
+        # em "nivel invertido" -- sem ele, a deteccao so acharia a entrada.
+        ctrl = self._ler_regs(REG_CONTROLE, 1)
+        if ctrl is None:
+            self._teste_fim("Nao foi possivel ler o reg 73 - teste nao "
+                            "iniciado", False)
+            return
 
-        while self.teste_ativo and (time.time() - t0) < self._TESTE_DURACAO:
+        self._log("[TESTE] Lendo o reg 75 por ate {:.0f} s. Comece com a lamina "
+                  "FORA do sensor, coloque e tire.".format(self._TESTE_DURACAO))
+
+        while (self.teste_ativo and (time.time() - t0) < self._TESTE_DURACAO
+               and max(bordas) < 2):
             vals = self._ler_regs(REG_STATUS, 1)
             agora = time.time()
             if vals is None:
@@ -490,27 +507,69 @@ class HomingMixin:
                        self._teste_ui(idx, s, b, r))
             time.sleep(self._TESTE_INTERVALO)
 
-        def _bit(valor, bit):
-            return "acionado" if valor is not None and valor & bit else "livre"
+        if not self.teste_ativo:
+            self._teste_fim("Teste interrompido - nada foi alterado", False)
+            return
+        if not any(bordas):
+            self._teste_fim("Nenhuma entrada mudou - confira alimentacao 24 V, o "
+                            "fio do sinal em IN1/IN2 e IN+ em +24 V", False)
+            return
+        if bordas[0] and bordas[1]:
+            self._teste_fim("As duas entradas mudaram (IN1 {}x, IN2 {}x) - "
+                            "confira a fiacao; nada foi alterado".format(*bordas),
+                            False)
+            return
 
-        nome_sel = _ENTRADAS[idx][0]
-        outro = 1 - idx
-        if bordas[idx]:
-            ok = True
-            msg = ("OK: {} comutou {}x (repouso={}, fim={}, {:.1f} s acionado) "
-                   "- confirme que 'acionado' e o came DENTRO da fenda".format(
-                       nome_sel, bordas[idx], _bit(primeiro, bit_sel),
-                       _bit(anterior, bit_sel), t_acionado))
-        elif bordas[outro]:
-            ok = False
-            msg = ("{} nao comutou; quem comutou foi {} ({}x) - selecione essa "
-                   "entrada na tela ou mova o fio".format(
-                       nome_sel, _ENTRADAS[outro][0], bordas[outro]))
+        det = 0 if bordas[0] else 1
+        nome, bit_st, bit_ctrl = _ENTRADAS[det]
+        repouso_acionado = bool(primeiro & bit_st)
+        # Nivel que faz o repouso (lamina fora) ser lido como "livre": o atual
+        # se o repouso ja saiu livre, o oposto se saiu acionado.
+        nivel_conduzindo = bool(ctrl[0] & bit_ctrl) != repouso_acionado
+        novo_73 = (ctrl[0] | bit_ctrl if nivel_conduzindo
+                   else ctrl[0] & ~bit_ctrl & 0xFFFF)
+        self._log("[TESTE] Sensor em {}: comutou {}x, repouso lido como {} com o "
+                  "reg 73 = 0x{:04X}".format(
+                      nome, bordas[det],
+                      "ACIONADO" if repouso_acionado else "livre", ctrl[0]))
+        self._teste_fim("Detectado: sensor em {}, ativo com o opto {}".format(
+            nome, "conduzindo" if nivel_conduzindo else "DESLIGADO"), True)
+        self.after(0, lambda: self._aplicar_deteccao(
+            det, not nivel_conduzindo, ctrl[0], novo_73))
+
+    def _aplicar_deteccao(self, det, invertido, reg73, novo_73):
+        """Leva a entrada e o nivel detectados para a tela e, se o drive
+        precisar mudar, pergunta antes de gravar o reg 73.
+
+        A tela muda sempre: e o que o homing e o rotulo do sensor usam. O
+        drive so e gravado com o sim do operador -- a deteccao supoe que o
+        teste comecou com a lamina fora, e so ele sabe se foi assim.
+        Na thread da interface.
+        """
+        nome = _ENTRADAS[det][0]
+        self.home_entrada.set(HOME_ENTRADA_POS if det else HOME_ENTRADA_NEG)
+        self.home_inv.set(1 if invertido else 0)
+        self._entrada_trocada()
+        self._log("[TESTE] Tela ajustada: entrada {}, nivel {}".format(
+            nome, "invertido" if invertido else "normal"))
+        if novo_73 == reg73:
+            self.lbl_home_status.config(
+                text="Detectado: {} - o drive ja esta certo (reg 73 = 0x{:04X}). "
+                     "Salve o cadastro do eixo.".format(nome, reg73), fg=GREEN)
+            return
+        if messagebox.askyesno(
+                "Sensor detectado",
+                "O sensor esta em {}.\n\nO reg 73 do drive esta em 0x{:04X} e "
+                "le o sensor invertido: com a lamina FORA ele acusa limite.\n\n"
+                "Gravar 0x{:04X} (ativo com o opto {})?\n\nResponda Nao se "
+                "voce comecou o teste com a lamina DENTRO do sensor, e repita."
+                .format(nome, reg73, novo_73,
+                        "DESLIGADO" if invertido else "conduzindo")):
+            self._gravar_config_di()
         else:
-            ok = False
-            msg = ("Nenhuma entrada mudou - confira alimentacao 24 V, o fio do "
-                   "sinal em IN1/IN2 e IN+ em +24 V")
-        self._teste_fim(msg, ok)
+            self.lbl_home_status.config(
+                text="Detectado: {} - o reg 73 NAO foi gravado".format(nome),
+                fg=YELLOW)
 
     def _teste_ui(self, idx, st, bordas, restante):
         """Mostra o estado ao vivo do sensor durante o teste. Thread da interface."""
@@ -610,6 +669,9 @@ class HomingMixin:
             self._homing_fim(False, "Interrompido pelo operador")
         else:
             self._homing_fim(res.ok, res.detalhe)
+        if res.causa == CAUSA_DRIVE_MUDO:
+            # O log diz de que tipo foram as falhas (mudo, CRC, outro endereco)
+            self.after(0, lambda: self._resumo_com(agora_mesmo=True))
 
     def _parar_homing(self):
         """Interrompe o retorno ao zero a pedido do operador.

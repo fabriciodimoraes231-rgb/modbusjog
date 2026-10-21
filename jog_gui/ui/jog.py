@@ -4,7 +4,7 @@ from tkinter import messagebox
 import time
 import tkinter as tk
 
-from jog_gui.motion import FRENTE, TRAS, MovimentoRecusado
+from jog_gui.motion import CAUSA_DRIVE_MUDO, FRENTE, TRAS, MovimentoRecusado
 from jog_gui.str6 import VEL_MAX_PPS
 
 from .tema import (
@@ -20,6 +20,7 @@ from .tema import (
     TEXT,
     TEXT_DIM,
     YELLOW,
+    fonte,
     vel_txt,
 )
 
@@ -90,7 +91,7 @@ class JogMixin:
 
         tk.Label(f, text="Watchdog: o eixo para se o drive parar de responder, "
                          "entrar em falha\nou atingir o limite de curso",
-                 bg=BG2, fg=TEXT_DIM, font=("Segoe UI", 8)).pack()
+                 bg=BG2, fg=TEXT_DIM, font=fonte(8)).pack()
 
     # --- VELOCIDADE -------------------------------------------------------------
 
@@ -120,6 +121,9 @@ class JogMixin:
             if res is not None:
                 # A parada ja foi comandada por vigiar_movimento
                 self._jog_falhou(res.detalhe)
+                if res.causa == CAUSA_DRIVE_MUDO:
+                    # O log diz de que tipo foram as falhas (mudo, CRC...)
+                    self.after(0, lambda: self._resumo_com(agora_mesmo=True))
                 return
 
     def _jog_falhou(self, motivo: str, mov=None):

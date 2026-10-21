@@ -3,7 +3,7 @@
 from tkinter import messagebox
 from tkinter import ttk
 import contextlib
-import serial.tools.list_ports
+import sys
 import threading
 import time
 import tkinter as tk
@@ -13,6 +13,8 @@ from jog_gui.str6 import (
     Barramento,
     Drive,
     DriveNaoConfirmou,
+    explicar_erro_porta,
+    portas_para_escolha,
     REG_CORRENTE_EFETIVA,
     REG_ID,
     REG_PULSOS_VOLTA,
@@ -38,14 +40,16 @@ class ConexaoMixin:
 
 
     def _card_conexao(self, parent):
-        """Monta o card: porta COM, baud rate, eixo ativo e o botao."""
+        """Monta o card: porta serial, baud rate, eixo ativo e o botao."""
         f = self._card(parent, "CONEXAO RS485")
 
         row = tk.Frame(f, bg=BG2)
         row.pack(fill="x", pady=3)
-        tk.Label(row, text="Porta COM:", bg=BG2, fg=TEXT, font=FONT_LABEL, width=12, anchor="w").pack(side="left")
+        tk.Label(row, text="Porta serial:", bg=BG2, fg=TEXT, font=FONT_LABEL, width=12, anchor="w").pack(side="left")
+        # No Linux o nome estavel (/dev/serial/by-id/...) e longo
         self.cb_port = ttk.Combobox(row, textvariable=self.port_var, state="readonly",
-                                    width=12, font=FONT_MONO)
+                                    width=12 if sys.platform.startswith("win") else 30,
+                                    font=FONT_MONO)
         self.cb_port.pack(side="left")
         tk.Button(row, text="Atualizar", bg=BG3, fg=ACCENT, font=FONT_LABEL,
                   bd=0, padx=6, cursor="hand2",
@@ -89,8 +93,10 @@ class ConexaoMixin:
 
         No Windows o numero da COM muda de maquina para maquina e de porta USB
         para porta USB -- nao ha porta padrao, e a escolha e sempre do operador.
+        No Linux vem primeiro /dev/serial/by-id/..., que aponta sempre para o
+        mesmo conversor, ao contrario de /dev/ttyUSB0 (ver portas_para_escolha).
         """
-        ports = [p.device for p in serial.tools.list_ports.comports()]
+        ports = portas_para_escolha()
         self.cb_port["values"] = ports
         if ports:
             self.port_var.set(ports[0])
@@ -112,13 +118,13 @@ class ConexaoMixin:
         port = self.port_var.get()
         baud = int(self.baud_var.get())
         if not port:
-            messagebox.showwarning("Atencao", "Selecione uma porta COM.")
+            messagebox.showwarning("Atencao", "Selecione uma porta serial.")
             return
         try:
             self.bus = Barramento.abrir(port, baudrate=baud, timeout=0.5,
                                         log=self._log)
         except Exception as e:
-            messagebox.showerror("Erro de Conexao", str(e))
+            messagebox.showerror("Erro de Conexao", explicar_erro_porta(port, e))
             return
         self._ligar_drives()
         self._set_connected(True)

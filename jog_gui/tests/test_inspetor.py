@@ -25,11 +25,18 @@ class _Janela(InspetorMixin):
         self._reg_mudancas = 0
         self.pintados = []
         self.ao_ler = None
+        self.movendo = []     # um bool por volta do laco; vazio = parado
+        self.logs = []
+        self.lidos = 0
 
     def _ivar(self, var, padrao=0):
         return padrao
 
+    def _movimento_em_curso(self):
+        return self.movendo.pop(0) if self.movendo else False
+
     def _ler_regs(self, reg, count):
+        self.lidos += 1
         if not self.leituras:
             self.reg_vigiando = False
             return None
@@ -45,7 +52,7 @@ class _Janela(InspetorMixin):
         self.pintados.append((reg, valor, anterior))
 
     def _log(self, msg):
-        pass
+        self.logs.append(msg)
 
 
 class TestVigilancia(unittest.TestCase):
@@ -76,6 +83,16 @@ class TestVigilancia(unittest.TestCase):
         self.assertEqual(j.pintados, [(75, 128, None), (75, 160, 128),
                                       (75, 128, 160)])
         self.assertEqual(j._reg_mudancas, 2)
+
+    def test_espera_enquanto_um_movimento_usa_o_barramento(self):
+        # Uma requisicao por vez: durante o movimento so a rotina dele le.
+        j = _Janela([128, 160])
+        j.movendo = [False, True, True, False]
+        j._reg_loop_vigia(75)
+        self.assertEqual(j.pintados, [(75, 128, None), (75, 160, 128)])
+        self.assertEqual(j.lidos, 3)          # 2 leituras + a que encerra
+        self.assertTrue(any("em espera" in m for m in j.logs))
+        self.assertTrue(any("retomada" in m for m in j.logs))
 
 
 if __name__ == "__main__":

@@ -31,8 +31,27 @@ Da pasta que **contém** `jog_gui/`:
 python -m jog_gui
 ```
 
-Dependência: `pyserial`. A porta COM é escolhida na própria tela — não há
+Dependência: `pyserial`. A porta é escolhida na própria tela — não há
 porta padrão.
+
+### No Linux
+
+```bash
+sudo apt install python3-tk          # o Tkinter nao vem em toda distribuicao
+python3 -m pip install pyserial
+sudo usermod -aG dialout $USER       # permissao na porta; saia e entre da sessao
+python3 -m jog_gui
+```
+
+- A lista de portas traz primeiro `/dev/serial/by-id/...`: o nome não muda com
+  a ordem em que os USB foram ligados, ao contrário de `/dev/ttyUSB0`.
+- A porta abre com **trava exclusiva**: se outro programa já estiver nela (outra
+  janela do jog_gui, o `stepper_node` do ROS, um terminal serial), a conexão é
+  recusada com essa explicação. Dois programas no mesmo barramento colidem e
+  derrubam a comunicação dos dois.
+- O conversor é posto em **baixa latência** (o FTDI segura os bytes por até
+  16 ms por padrão). Se o driver não aceitar, o log avisa e segue sem.
+- Fontes: DejaVu no lugar de Segoe UI/Consolas, que só existem no Windows.
 
 Testes:
 
@@ -250,15 +269,24 @@ bits 5 (limite −) e 4 (limite +) do status (75).
   o limite ocorre com o optoacoplador **conduzindo**. *Ativo com o opto
   desligado* zera o bit — para sensor NF.
 - **Filtro do limite** (reg 74) em unidades de 50 µs; a tela mostra em ms.
-- **TESTAR SENSOR** lê o 75 por até 30 s sem energizar o motor e diz qual
-  entrada comutou — inclusive se o fio está na entrada errada.
+- **TESTAR SENSOR** detecta a entrada e o nível sem energizar o motor. Comece
+  com a lâmina **fora** do sensor, coloque e tire: o teste termina sozinho,
+  seleciona na tela a entrada que comutou (IN1 ou IN2) e, se o repouso foi lido
+  como acionado, propõe o nível certo do reg 73 e pergunta antes de gravar.
+  As duas entradas mudando, ou nenhuma, não altera nada.
+- O rótulo do sensor mostra **as duas entradas** ao vivo (monitor ligado); a
+  selecionada aparece entre colchetes.
 
 Dois modos:
 
 | Modo | Como funciona |
 |---|---|
-| **Nativo do drive (reg 71)** — padrão | 71 = 2 (IN1) ou 1 (IN2). O drive vai até o sinal na velocidade/aceleração de 62~67, desacelera, e volta até o sinal na velocidade do reg 60 (p. 18). O fim é o eixo imóvel por 1,5 s depois de ter andado. Depois, 40 = 1 zera o contador. |
-| **Software — busca pelo sensor** | o programa procura o came em contínuo, sai da fenda, reaproxima no rastejo e para na borda; depois 40 = 1. |
+| **Software — busca pelo sensor** — padrão | o programa procura o came em contínuo, sai da fenda, reaproxima no rastejo e para na borda; depois 40 = 1. |
+| **Nativo do drive (reg 71)** | 71 = 2 (IN1) ou 1 (IN2). O drive vai até o sinal na velocidade/aceleração de 62~67, desacelera, e volta até o sinal na velocidade do reg 60 (p. 18). O fim é o eixo imóvel por 1,5 s depois de ter andado. Depois, 40 = 1 zera o contador. |
+
+Desde 16/10/2026 o padrão é o **software**: o nativo pode deixar o motor travado
+depois que o sensor, ligado como limite, aciona. Um `eixos.json` gravado antes
+continua com o modo que foi salvo nele — troque no card HOMING.
 
 O zero só vale com o contador **confirmado** em zero por leitura. Homing
 interrompido ou com falha invalida o zero e, com ele, os limites de curso.
@@ -314,12 +342,29 @@ cinco ciclos — e quatro de **um** eixo secundário, em rodízio. Um eixo em
 movimento lê três quadros por ciclo. É por isso que **esta bancada move um eixo
 por vez**.
 
+- **Uma requisição por vez, na ordem:** o Barramento atende por senha — quem
+  pediu primeiro transmite primeiro, e nenhuma thread passa à frente.
+- **Durante JOG, homing, posicionamento ou TESTAR SENSOR, só a rotina do
+  movimento fala com o drive.** O monitor e a vigilância do inspetor esperam;
+  o status e a posição do card vêm do progresso do próprio movimento. Assim o
+  watchdog, que para o eixo com duas leituras perdidas, nunca espera na fila.
+
 - Um ciclo novo do monitor só começa depois que o anterior terminou. Sem isso,
   ciclos lentos (1 s de timeout por quadro de eixo mudo) se empilhavam na fila
   do barramento, e gravação, salvamento e a vigilância do JOG esperavam
   dezenas de segundos pela vez.
-- Eixo secundário que não responde sai do rodízio por 10 s (`_PAUSA_MUDO_S`);
-  a linha dele na barra continua "sem resposta".
+- Eixo que não responde só aparece como "sem resposta" na **segunda** leitura
+  seguida perdida (`_FALHAS_PARA_MUDO`); um quadro perdido por ruído não pisca a
+  barra. O secundário então sai do rodízio por 10 s (`_PAUSA_MUDO_S`).
+- O silêncio entre quadros é garantido **no Barramento**, dentro do lock, valha
+  para a thread que for: 10 ms depois de uma resposta (`PAUSA_QUADRO`) e 50 ms
+  depois de uma falha (`PAUSA_APOS_FALHA`), para não atropelar uma resposta
+  atrasada. Antes, o monitor, a vigilância do JOG e o inspetor podiam mandar um
+  pedido colado no último byte da resposta anterior.
+- A cada 30 s, se houve falha, o log traz o resumo por drive: `[COM] ultimos
+  30 s: drive 3: 412 ok, 2 sem resposta, 1 CRC`. **Sem resposta** aponta
+  endereço, alimentação ou pedido atropelado; **CRC** aponta ruído no cabo;
+  **de outro endereço** aponta colisão ou dois drives no mesmo endereço.
 
 ### Arquivo `eixos.json`
 
@@ -362,7 +407,9 @@ seguro em qualquer das leituras. Cada uma precisa de confirmação em bancada:
    (1 habilita, 0 desabilita), porque o conector não tem entrada ENA. Confirmar
    antes de confiar no MOTOR OFF como liberação do eixo.
 2. **Bit 7 do status (75)**: a descrição diz 0 = concluído, mas o "valor padrão"
-   é 1. Por isso o fim de movimento nunca depende só dele.
+   é 1. Desde 16/10/2026 o código segue o nome do bit (`BIT7_UM_E_CONCLUIDO`): a
+   bancada leu 1 com o motor parado. Falta a leitura com o motor girando, e o fim
+   de movimento nunca depende só dele.
 3. **IN1/IN2/IN3**: o conector (p. 8) diz IN1 = limite −, IN2 = limite +, IN3
    reservado; a tabela do reg 73 (p. 17) cita IN3 como limite negativo. O código
    segue o conector. Rodar o TESTAR SENSOR resolve.
@@ -381,6 +428,6 @@ seguro em qualquer das leituras. Cada uma precisa de confirmação em bancada:
    salvamento incompleto e 1 concluído, mas não se o 1 volta a 0 depois, nem
    que é preciso escrever 1 para salvar (inferido pelo padrão do 91 e do 93).
    O atributo do registrador 0 (corrente de pico) também está em branco na
-   tabela (p. 13). Que a corrente fica gravada só está demonstrado contra o
-   drive simulado; no drive real, rodar o *Testar gravação* e guardar as linhas
-   `[GRAV]` do log como registro.
+   tabela (p. 13). Na bancada (16/10/2026) o 90 leu 0 nas 50 consultas: o drive
+   não sinaliza o fim do salvamento. Só o *Testar gravação* prova que a corrente
+   ficou gravada; guarde as linhas `[GRAV]` do log como registro.

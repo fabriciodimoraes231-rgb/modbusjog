@@ -28,7 +28,7 @@ from .sensores import tem_origem as _sensor_tem_origem
 # guardado no eixos.json -- e ConfigEixo.de_dict os traduz.
 HOME_MODO_NATIVO = "Nativo do drive (reg 71)"
 HOME_MODO_SOFTWARE = "Software - busca pelo sensor"
-HOME_MODOS = (HOME_MODO_NATIVO, HOME_MODO_SOFTWARE)
+HOME_MODOS = (HOME_MODO_SOFTWARE, HOME_MODO_NATIVO)
 
 HOME_ENTRADA_NEG = "Limite - (IN1)"
 HOME_ENTRADA_POS = "Limite + (IN2)"
@@ -61,7 +61,7 @@ CAMPOS = (
     ("sensor_tipo",     "sensor_tipo",  SENSOR_PADRAO),
 
     # --- homing (60, 64/65, 71, 73, 74) ---
-    ("home_modo",       "home_modo",    HOME_MODO_NATIVO),
+    ("home_modo",       "home_modo",    HOME_MODO_SOFTWARE),
     ("home_entrada",    "home_entrada", HOME_ENTRADA_NEG),
     ("home_inv",        "home_inv",           0),
     ("home_filtro",     "home_filtro",        2),

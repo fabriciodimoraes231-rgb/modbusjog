@@ -867,6 +867,8 @@ class TestConfigEixo(unittest.TestCase):
         self.assertEqual((c.limite_pos, c.limite_neg), (0, 0))
         self.assertFalse(c.limites_ativos)
         self.assertTrue(c.soltar_em_emergencia)
+        # Decisao de 16/10/2026: o nativo pode travar o motor.
+        self.assertEqual(c.home_modo, "software")
 
     def test_campo_estragado_cai_no_padrao(self):
         c = self._cfg({"jog_velocidade": "abc", "tolerancia": None})

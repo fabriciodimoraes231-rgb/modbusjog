@@ -31,6 +31,7 @@ from jog_gui.str6 import (
     VARREDURA_MAX,
     de_palavras_32,
     em_movimento,
+    nomes_status,
 )
 
 from .eixo import VERSAO_CADASTRO, Eixo
@@ -118,10 +119,23 @@ class DrivesMixin:
         """Leva a posicao de um movimento em curso para a regua do curso.
 
         Chamado da thread do movimento; a pintura vai para a da interface.
+        Com um movimento em curso o monitor espera (ver
+        StatusMixin._movimento_em_curso): o status e a posicao do card de
+        status tambem vem daqui.
         """
         pos = dados.get("pos")
+        st = dados.get("status")
         if pos is not None:
             self.after(0, lambda p=pos: self._curso_ui(p))
+
+        def _rotulos():
+            if st is not None and hasattr(self, "lbl_sw"):
+                self.lbl_sw.config(text="0x{:04X}  {}".format(
+                    st, "  ".join(nomes_status(st)) or "ok"),
+                    fg=RED if st & ST_FALHA else TEXT)
+            if pos is not None and hasattr(self, "lbl_pos"):
+                self.lbl_pos.config(text="{} pulsos".format(pos))
+        self.after(0, _rotulos)
 
     # --- estado de runtime, delegado ao eixo ativo ----------------------------
     #

@@ -18,8 +18,15 @@ TIMEOUT = 1.0
 
 # Silencio entre quadros. Modbus RTU exige 3,5 caracteres entre transacoes
 # (~4 ms a 9600 bps, ~0,4 ms a 115200). Com varios drives na mesma linha,
-# encurtar isso faz um drive atropelar a resposta do outro.
+# encurtar isso faz um drive atropelar a resposta do outro. O Barramento o
+# garante entre o fim de uma transacao e o inicio da proxima, venham elas da
+# thread que vierem.
 PAUSA_QUADRO = 0.01
+
+# Silencio depois de uma transacao que falhou (sem resposta, CRC ou endereco
+# errado). Uma resposta atrasada pode ainda estar chegando: mandar o proximo
+# pedido em cima dela colide na linha e derruba mais um quadro.
+PAUSA_APOS_FALHA = 0.05
 
 # --- Drives do barramento -----------------------------------------------------
 # O endereco vem dos DIP S1~S5 (1~31) e so vale apos religar (manual p. 11):

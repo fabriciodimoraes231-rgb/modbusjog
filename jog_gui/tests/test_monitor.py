@@ -30,6 +30,7 @@ class _Janela(StatusMixin, DrivesMixin):
         self._poll_tick = 0
         self._poll_after = None
         self._secundario_mudo_ate = {}
+        self._falhas_seguidas = {}
         self.eixos = {i: None for i in eixos}
         self.slave = _Var(ativo)
         self.disparados = []
@@ -77,6 +78,18 @@ class TestUmCicloPorVez(unittest.TestCase):
         self.assertEqual(len(j.disparados), 1)
         self.assertEqual(j.ciclos, 1)
 
+    def test_monitor_espera_enquanto_um_movimento_usa_o_barramento(self):
+        # Uma requisicao por vez: durante JOG, homing, posicionamento ou teste
+        # do sensor, so a rotina do movimento fala com o drive.
+        for flag in ("jog_active", "home_ativo", "teste_ativo", "curso_mov"):
+            j = _Janela()
+            setattr(j, flag, True)
+            j._poll_status()
+            self.assertEqual(j.disparados, [], flag)
+            setattr(j, flag, False)
+            j._poll_status()
+            self.assertEqual(len(j.disparados), 1, flag)
+
     def test_ciclo_que_falha_tambem_libera(self):
         j = _Janela()
 
@@ -95,21 +108,38 @@ class TestRodizioDosSecundarios(unittest.TestCase):
     def test_eixo_mudo_sai_do_rodizio(self):
         j = _Janela(eixos=(1, 2, 3), ativo=1)
         j.mudos = {2}
-        for _ in range(4):
+        for _ in range(5):
             j._poll_secundarios()
-        # o 2 e consultado uma vez, nao responde, e o rodizio fica no 3
-        self.assertEqual(j.lidos, [2, 3, 3, 3])
+        # o 2 so sai do rodizio na segunda falha seguida; dai fica o 3
+        self.assertEqual(j.lidos, [2, 3, 2, 3, 3])
+
+    def test_falha_isolada_nao_marca_sem_resposta(self):
+        # Um quadro perdido por ruido nao pode piscar "sem resposta" na barra
+        # nem tirar o eixo do rodizio por 10 s.
+        j = _Janela(eixos=(1, 2), ativo=1)
+        linhas = []
+        j._atualizar_linha = lambda ident, resumo: linhas.append(resumo)
+        j.after = lambda ms, fn: fn()
+        j.mudos = {2}
+        j._poll_secundarios()
+        self.assertEqual(linhas, [])
+        self.assertNotIn(2, j._secundario_mudo_ate)
+        j.mudos = set()
+        j._poll_secundarios()
+        self.assertEqual(linhas, [{"status": 0}])
+        self.assertNotIn(2, j._falhas_seguidas)
 
     def test_eixo_volta_ao_rodizio_depois_da_pausa(self):
         j = _Janela(eixos=(1, 2), ativo=1)
         j.mudos = {2}
         j._poll_secundarios()
         j._poll_secundarios()
-        self.assertEqual(j.lidos, [2])
+        j._poll_secundarios()
+        self.assertEqual(j.lidos, [2, 2])
         j._secundario_mudo_ate[2] = 0          # pausa vencida
         j.mudos = set()
         j._poll_secundarios()
-        self.assertEqual(j.lidos, [2, 2])
+        self.assertEqual(j.lidos, [2, 2, 2])
         self.assertNotIn(2, j._secundario_mudo_ate)
 
 

@@ -41,6 +41,7 @@ from .config import (
     ID_NEMA2_CABEC,
     ID_SPIN_MOTOR,
     MALHA_PADRAO,
+    PAUSA_APOS_FALHA,
     PAUSA_QUADRO,
     PULSOS_VOLTA,
     RAMPA_MS,
@@ -51,7 +52,13 @@ from .config import (
     VARREDURA_MAX,
     VEL_MAX_PPS,
 )
-from .barramento import Barramento, listar_portas, resolver_porta
+from .barramento import (
+    Barramento,
+    explicar_erro_porta,
+    listar_portas,
+    portas_para_escolha,
+    resolver_porta,
+)
 from .drive import (
     RELIGA_DESLIGADO,
     RELIGA_ESPERANDO,
@@ -121,6 +128,7 @@ def conectar(descricao=None, porta=None, baudrate=BAUDRATE, log=None):
 __all__ = [
     # conexao
     "conectar", "Barramento", "resolver_porta", "listar_portas",
+    "portas_para_escolha", "explicar_erro_porta",
     # drives
     "Drive", "DriveNaoConfirmou", "desarmar_todos", "varrer",
     "aceleracao_da_rampa", "perfil_movimento", "comparar_configuracao",
@@ -131,6 +139,7 @@ __all__ = [
     "descrever_excecao", "palavras_32", "de_palavras_32",
     # configuracao
     "BAUDRATE", "BAUDRATES_SUPORTADOS", "TIMEOUT", "PAUSA_QUADRO",
+    "PAUSA_APOS_FALHA",
     "CORRENTES_MA", "TODOS_OS_DRIVES", "SLAVE_MIN", "SLAVE_MAX",
     "VARREDURA_MAX", "ID_NEMA1_SOCKET", "ID_NEMA2_CABEC", "ID_SPIN_MOTOR",
     "MALHA_PADRAO", "PULSOS_VOLTA", "VEL_MAX_PPS", "RAMPA_MS", "ESPERA_SALVAR",
